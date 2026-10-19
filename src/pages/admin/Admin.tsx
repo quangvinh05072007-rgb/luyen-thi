@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { get, post, put } from '../../api';
-import { Bar, ErrorBox, fmtDateTime, fmtScore, Loading, Modal, pct, scoreColor, useApp, useAsync } from '../../ui/kit';
+import { shareUrl, Bar, ErrorBox, fmtDateTime, fmtScore, Loading, Modal, pct, scoreColor, useApp, useAsync } from '../../ui/kit';
 
 export function AdminHome() {
   const { meta } = useApp();
@@ -120,11 +120,14 @@ export function AdminHome() {
 }
 
 export function Users() {
-  const { toast } = useApp();
+  const { toast, meta } = useApp();
   const { data, error, loading, reload } = useAsync(() => get('/api/admin/users'), []);
   const [form, setForm] = useState<any | null>(null);
   const [classForm, setClassForm] = useState<any | null>(null);
   const [secret, setSecret] = useState<{ who: string; pw: string } | null>(null);
+  const [bulk, setBulk] = useState<{ text: string; classId: string; role: string } | null>(null);
+  const [created, setCreated] = useState<any[] | null>(null);
+  const backups = useAsync(() => get('/api/admin/backups'), []);
   if (loading) return <Loading />;
   if (error) return <ErrorBox error={error} onRetry={reload} />;
   const createUser = async () => {
@@ -155,6 +158,38 @@ export function Users() {
     await put(`/api/admin/classes/${classId}`, { teacherId: teacherId ? Number(teacherId) : null });
     reload();
   };
+  const bulkRows = (bulk?.text ?? '')
+    .split(/\r?\n/)
+    .map((l) => l.split(/\t|,|;/).map((x) => x.trim()))
+    .filter((c) => c[0] && !/^(họ|ho|tên|ten|stt)\b/i.test(c[0]))
+    .map((c) => (/^\d+$/.test(c[0]) ? c.slice(1) : c))
+    .map((c) => ({ name: c[0], className: c[1] ?? '', role: bulk?.role }));
+  const runBulk = async () => {
+    try {
+      const r = await post('/api/admin/users/bulk', { rows: bulkRows, classId: bulk?.classId || undefined });
+      setCreated(r.created);
+      setBulk(null);
+      reload();
+    } catch (e: any) {
+      toast(e.message);
+    }
+  };
+  const downloadCsv = () => {
+    const csv = '﻿Họ tên,Lớp,Tên đăng nhập,Mật khẩu tạm\r\n' + created!.map((c) => [c.name, c.className ?? '', c.username, c.tempPassword].join(',')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = 'tai-khoan-moi.csv';
+    a.click();
+  };
+  const backupNow = async () => {
+    try {
+      await post('/api/admin/backups');
+      toast('Đã sao lưu.');
+      backups.reload();
+    } catch (e: any) {
+      toast(e.message);
+    }
+  };
   const teachers = data.users.filter((u: any) => u.role === 'teacher');
   const ROLE: Record<string, string> = { admin: 'Quản lý', teacher: 'Giáo viên', student: 'Học sinh' };
   return (
@@ -165,8 +200,11 @@ export function Users() {
           <button className="btn" onClick={() => setClassForm({ name: '', grade: 12, teacherId: '' })}>
             Thêm lớp
           </button>
-          <button className="btn primary" onClick={() => setForm({ role: 'student', username: '', displayName: '', classId: data.classes[0]?.id ?? '' })}>
-            Thêm người dùng
+          <button className="btn" onClick={() => setForm({ role: 'student', username: '', displayName: '', classId: data.classes[0]?.id ?? '' })}>
+            Thêm một người
+          </button>
+          <button className="btn primary" onClick={() => setBulk({ text: '', classId: '', role: 'student' })}>
+            Nhập danh sách
           </button>
         </div>
       </div>
@@ -232,6 +270,83 @@ export function Users() {
           </tbody>
         </table>
       </div>
+      <div className="card">
+        <div className="card-head">
+          <h2>Sao lưu dữ liệu</h2>
+          <button className="btn sm" onClick={backupNow}>
+            Sao lưu ngay
+          </button>
+        </div>
+        <p className="small muted">Máy tự sao lưu khi khởi động và mỗi 6 giờ, giữ 14 bản gần nhất trong thư mục <span className="kbd">{backups.data?.dir ?? 'data/backups'}</span>. Chép thư mục này ra ổ khác định kỳ. Khôi phục: tắt máy chủ, chép bản sao lưu đè lên <span className="kbd">data/smartexam.db</span>.</p>
+        {(backups.data?.backups ?? []).slice(0, 5).map((b: any) => (
+          <div key={b.name} className="row between small">
+            <span>{b.name}</span>
+            <span className="muted">
+              {fmtDateTime(b.at)} · {Math.round(b.size / 1024)} KB
+            </span>
+          </div>
+        ))}
+      </div>
+      {bulk && (
+        <Modal title="Nhập danh sách tài khoản" onClose={() => setBulk(null)}>
+          <div className="stack">
+            <p className="small muted">Dán từ Excel: mỗi dòng một người. Cột 1 là họ tên, cột 2 (không bắt buộc) là lớp, ví dụ <span className="kbd">Nguyễn Văn A, 12A1</span>. Lớp chưa có sẽ được tạo. Tên đăng nhập và mật khẩu tạm sinh tự động.</p>
+            <div className="row">
+              <div className="seg">
+                <button className={bulk.role === 'student' ? 'on' : ''} onClick={() => setBulk({ ...bulk, role: 'student' })}>
+                  Học sinh
+                </button>
+                <button className={bulk.role === 'teacher' ? 'on' : ''} onClick={() => setBulk({ ...bulk, role: 'teacher' })}>
+                  Giáo viên
+                </button>
+              </div>
+              {bulk.role === 'student' && (
+                <select className="input" style={{ width: 'auto' }} value={bulk.classId} onChange={(e) => setBulk({ ...bulk, classId: e.target.value })} aria-label="Lớp chung">
+                  <option value="">Lớp ghi ở cột 2</option>
+                  {data.classes.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      Tất cả vào lớp {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <textarea className="input" style={{ minHeight: 220 }} value={bulk.text} onChange={(e) => setBulk({ ...bulk, text: e.target.value })} placeholder={'Nguyễn Văn An\t12A1\nTrần Thị Bình\t12A1'} />
+            <div className="small muted">Đọc được {bulkRows.length} người.</div>
+            <button className="btn primary" disabled={!bulkRows.length} onClick={runBulk}>
+              Tạo {bulkRows.length} tài khoản
+            </button>
+          </div>
+        </Modal>
+      )}
+      {created && (
+        <Modal title={`Đã tạo ${created.length} tài khoản`} onClose={() => setCreated(null)}>
+          <p className="small muted no-print">Mật khẩu tạm chỉ hiện lần này. In phiếu hoặc tải file rồi phát cho từng người; nhắc đổi mật khẩu ở trang Tài khoản.</p>
+          <div className="row mb no-print">
+            <button className="btn primary" onClick={() => window.print()}>
+              In phiếu
+            </button>
+            <button className="btn" onClick={downloadCsv}>
+              Tải file CSV
+            </button>
+          </div>
+          <div className="print-area slips">
+            {created.map((c) => (
+              <div key={c.username} className="slip">
+                <div className="strong">{c.name}</div>
+                <div className="tiny">{c.className ? `Lớp ${c.className}` : c.role === 'teacher' ? 'Giáo viên' : ''}</div>
+                <div className="small">
+                  Đăng nhập: <b>{c.username}</b>
+                </div>
+                <div className="small">
+                  Mật khẩu: <b className="kbd">{c.tempPassword}</b>
+                </div>
+                <div className="tiny muted">Địa chỉ: {shareUrl(meta)}</div>
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
       {form && (
         <Modal title="Thêm người dùng" onClose={() => setForm(null)}>
           <div className="stack">

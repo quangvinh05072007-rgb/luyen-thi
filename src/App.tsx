@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { get, post, setUnauthorizedHandler } from './api';
 import { AppCtx, Icon, Loading, Meta, User, useRoute, go, ErrorBox } from './ui/kit';
 import { Login } from './pages/Login';
+import { Setup } from './pages/Setup';
 import { Account } from './pages/Account';
 import { TeacherHome } from './pages/teacher/TeacherHome';
 import { Bank } from './pages/teacher/Bank';
@@ -52,6 +53,7 @@ export function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [toastMsg, setToast] = useState<string | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
   const { path } = useRoute();
 
   const refreshUser = useCallback(() => {
@@ -62,6 +64,7 @@ export function App() {
   useEffect(() => {
     setUnauthorizedHandler(() => setUser(null));
     get('/api/meta').then(setMeta).catch((e) => setBootError(e.message));
+    get('/api/setup').then((r) => setNeedsSetup(r.needsSetup)).catch(() => setNeedsSetup(false));
     refreshUser();
   }, [refreshUser]);
   const toast = useCallback((s: string) => {
@@ -70,7 +73,8 @@ export function App() {
   }, []);
 
   if (bootError) return <div className="main"><ErrorBox error={bootError} onRetry={() => location.reload()} /></div>;
-  if (!meta || user === undefined) return <Loading text="Đang mở SmartExam…" />;
+  if (!meta || user === undefined || needsSetup === null) return <Loading text="Đang mở SmartExam…" />;
+  if (!user && needsSetup) return <Setup onDone={(u) => { setNeedsSetup(false); setUser(u); go('/'); }} />;
   if (!user) return <Login onLogin={(u) => { setUser(u); go('/'); }} />;
 
   const logout = async () => {

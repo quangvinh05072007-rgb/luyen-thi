@@ -1,5 +1,6 @@
 // Máy chủ API SmartExam AI. createApp(config) trả về hàm xử lý yêu cầu http, dùng cho cả chạy thật và test.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { openDb, toQuestion } from './db.mjs';
 import { hashPassword, verifyPassword, newToken, tempPassword, LoginLimiter, parseCookies } from './security.mjs';
@@ -11,6 +12,8 @@ import { diagnoseAttempt, diagnoseItem, computeMastery, recommend, updateReview,
 import { examToDocx } from '../shared/exportExam.mjs';
 import { TOPICS, TOPIC_BY_CODE, LEVELS, SOURCES, SOURCE_HINT, ERROR_TYPES, QUESTION_TYPES } from '../shared/topics.mjs';
 import { CSV_TEMPLATE } from '../shared/sheet.mjs';
+import { seedSample } from './seed.mjs';
+import { SAMPLE_QUESTIONS } from './seedQuestions.mjs';
 
 export const SAVE_GRACE_MS = 30 * 1000; // ân hạn mạng sau giờ nộp
 export const LATE_WINDOW_MS = 15 * 60 * 1000; // nhận bản đồng bộ muộn (mất mạng) để giáo viên quyết định
@@ -372,6 +375,7 @@ export function createApp(config = {}) {
     types: QUESTION_TYPES,
     officialBlueprint: OFFICIAL_BLUEPRINT,
     aiEnabled: ai.enabled,
+    lanIps: Object.values(os.networkInterfaces()).flat().filter((a) => a && a.family === 'IPv4' && !a.internal).map((a) => a.address),
     aiHint: ai.enabled ? null : 'Chưa cấu hình khóa AI. Thêm ANTHROPIC_API_KEY vào config.local.json rồi khởi động lại.',
     serverNow: now(),
   }));
@@ -1063,6 +1067,122 @@ export function createApp(config = {}) {
     ),
   }));
 
+  // ---- nhập học sinh hàng loạt ----
+  function makeUsername(name, prefix) {
+    const parts = name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(Boolean);
+    const base = `${prefix}.${parts.length ? parts[parts.length - 1] + (parts.length > 1 ? '.' + parts.slice(0, -1).map((p) => p[0]).join('') : '') : 'user'}`.slice(0, 28);
+    let u = base;
+    for (let i = 2; db.get('SELECT id FROM users WHERE username = ?', u); i++) u = `${base}${i}`;
+    return u;
+  }
+  route('POST', '/api/admin/users/bulk', ['admin'], ({ user, body, ip }) => {
+    // rows: [{ name, className, role? }] — lớp chưa có thì tạo, khối lấy từ tên lớp (10/11/12).
+    const rows = (Array.isArray(body.rows) ? body.rows : []).map((r) => ({ name: String(r.name ?? '').trim(), className: String(r.className ?? '').trim().toUpperCase(), role: r.role === 'teacher' ? 'teacher' : 'student' })).filter((r) => r.name);
+    if (!rows.length) fail(400, 'Danh sách trống. Dán mỗi dòng một tên, có thể kèm lớp sau dấu phẩy hoặc tab.');
+    if (rows.length > 2000) fail(400, 'Mỗi lần nhập tối đa 2000 người.');
+    for (const r of rows) {
+      if (r.role === 'student' && !r.className && !body.classId) fail(400, `Chưa có lớp cho "${r.name}". Chọn lớp chung hoặc ghi lớp sau tên.`);
+      if (r.className && !/^(10|11|12)/.test(r.className)) fail(400, `Lớp "${r.className}" phải bắt đầu bằng khối 10, 11 hoặc 12 (ví dụ 12A1).`);
+    }
+    const created = db.tx(() =>
+      rows.map((r) => {
+        let classId = null;
+        let className = null;
+        if (r.role === 'student') {
+          if (r.className) {
+            let c = db.get('SELECT id, name FROM classes WHERE school_id = ? AND upper(name) = ?', user.school_id, r.className);
+            if (!c) c = { id: Number(db.run('INSERT INTO classes (school_id, name, grade) VALUES (?,?,?)', user.school_id, r.className, Number(r.className.slice(0, 2))).lastInsertRowid), name: r.className };
+            classId = c.id;
+            className = c.name;
+          } else {
+            const c = db.get('SELECT id, name FROM classes WHERE id = ? AND school_id = ?', Number(body.classId), user.school_id);
+            if (!c) fail(400, 'Lớp đã chọn không thuộc trường.');
+            classId = c.id;
+            className = c.name;
+          }
+        }
+        const username = makeUsername(r.name, r.role === 'teacher' ? 'gv' : 'hs');
+        const pw = tempPassword();
+        db.run('INSERT INTO users (school_id, role, username, display_name, pass_hash, class_id, created_at) VALUES (?,?,?,?,?,?,?)', user.school_id, r.role, username, r.name, hashPassword(pw), classId, now());
+        return { name: r.name, role: r.role, className, username, tempPassword: pw };
+      }),
+    );
+    audit(user, 'user_bulk_create', `${created.length} tài khoản`, ip);
+    return { created };
+  });
+
+  // ---- sao lưu ----
+  function backupNow(reason = 'auto') {
+    if (!config.backupDir) throw new HttpError(400, 'Chưa cấu hình thư mục sao lưu.');
+    fs.mkdirSync(config.backupDir, { recursive: true });
+    const stamp = new Date(now() + 7 * 3600000).toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 13);
+    const file = path.join(config.backupDir, `smartexam-${stamp}-${reason}.db`);
+    if (fs.existsSync(file)) fs.rmSync(file);
+    db.raw.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
+    const all = fs.readdirSync(config.backupDir).filter((f) => /^smartexam-.*\.db$/.test(f)).sort();
+    for (const old of all.slice(0, Math.max(0, all.length - (config.keepBackups ?? 14)))) fs.rmSync(path.join(config.backupDir, old));
+    return file;
+  }
+  route('GET', '/api/admin/backups', ['admin'], () => {
+    if (!config.backupDir || !fs.existsSync(config.backupDir)) return { backups: [], dir: config.backupDir ?? null };
+    return {
+      dir: config.backupDir,
+      backups: fs
+        .readdirSync(config.backupDir)
+        .filter((f) => /^smartexam-.*\.db$/.test(f))
+        .sort()
+        .reverse()
+        .map((f) => ({ name: f, size: fs.statSync(path.join(config.backupDir, f)).size, at: fs.statSync(path.join(config.backupDir, f)).mtimeMs })),
+    };
+  });
+  route('POST', '/api/admin/backups', ['admin'], ({ user, ip }) => {
+    const file = backupNow('tay');
+    audit(user, 'backup', path.basename(file), ip);
+    return { name: path.basename(file) };
+  });
+
+  // ---- thiết lập lần đầu ----
+  // Trang đăng nhập chỉ hiện tài khoản mẫu khi máy đang chạy trường mẫu.
+  route('GET', '/api/demo', null, () => ({ sample: !!db.get("SELECT id FROM users WHERE username = 'hs.an.nm' AND school_id IN (SELECT id FROM schools WHERE sample = 1)") }));
+  route('GET', '/api/setup', null, () => ({ needsSetup: !db.get('SELECT id FROM schools LIMIT 1') }));
+  route('POST', '/api/setup', null, ({ body, ip, setCookie }) => {
+    if (db.get('SELECT id FROM schools LIMIT 1')) fail(409, 'Trường đã được thiết lập. Đăng nhập bằng tài khoản quản lý.');
+    let adminId;
+    if (body.mode === 'sample') {
+      seedSample({ db, now, internals: { finalize, getAttempt, withClock: (fn, b) => { const prev = clockFn; clockFn = fn; try { return b(); } finally { clockFn = prev; } } } });
+      adminId = db.get("SELECT id FROM users WHERE username = 'quanly'").id;
+    } else {
+      const schoolName = String(body.schoolName ?? '').trim();
+      const adminName = String(body.adminName ?? '').trim();
+      const username = String(body.username ?? '').trim().toLowerCase();
+      const password = String(body.password ?? '');
+      if (!schoolName || !adminName) fail(400, 'Nhập tên trường và tên người quản lý.');
+      if (!/^[a-z0-9._-]{3,32}$/.test(username)) fail(400, 'Tên đăng nhập 3–32 ký tự: chữ không dấu, số, dấu chấm, gạch.');
+      if (password.length < 8) fail(400, 'Mật khẩu quản lý cần ít nhất 8 ký tự.');
+      adminId = db.tx(() => {
+        const school = Number(db.run('INSERT INTO schools (name, sample) VALUES (?, 0)', schoolName).lastInsertRowid);
+        const id = Number(db.run('INSERT INTO users (school_id, role, username, display_name, pass_hash, created_at) VALUES (?,?,?,?,?,?)', school, 'admin', username, adminName, hashPassword(password), now()).lastInsertRowid);
+        if (body.withSampleBank) {
+          const t = now();
+          for (const q of SAMPLE_QUESTIONS) {
+            db.run(
+              `INSERT INTO questions (school_id, type, stem, options_json, answer_json, explanation, topic, level, source, status, distractors_json, origin, created_by, approved_by, created_at, updated_at, sample, tag_confidence)
+               VALUES (?,?,?,?,?,?,?,?, 'teacher', 'approved', ?, 'Ngân hàng mẫu SmartExam', ?, ?, ?, ?, 1, 1)`,
+              school, q.type, q.stem, JSON.stringify(q.options), JSON.stringify(q.answer), q.explanation, q.topic, q.level, JSON.stringify(q.distractors ?? {}), id, id, t, t,
+            );
+          }
+        }
+        return id;
+      });
+    }
+    const u = db.get('SELECT * FROM users WHERE id = ?', adminId);
+    const token = newToken();
+    db.run('INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?,?,?,?)', token, u.id, now(), now() + SESSION_MS);
+    setCookie(`se_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_MS / 1000}`);
+    audit(u, 'setup', body.mode === 'sample' ? 'Trường mẫu' : 'Trường thật', ip);
+    return { user: publicUser(u) };
+  });
+
   // ---------------- xử lý http ----------------
   function authUser(cookies) {
     const token = cookies.se_session;
@@ -1164,6 +1284,7 @@ export function createApp(config = {}) {
     db,
     ai,
     now,
+    backupNow,
     internals: {
       finalize,
       getAttempt,

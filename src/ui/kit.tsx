@@ -27,11 +27,18 @@ export type Meta = {
   errorTypes: Record<string, { label: string; hint: string; action: string }>;
   types: Record<string, string>;
   aiEnabled: boolean;
+  lanIps: string[];
   aiHint: string | null;
 };
 export type User = { id: number; role: 'admin' | 'teacher' | 'student'; username: string; displayName: string; class: { id: number; name: string; grade: number } | null; school: { id: number; name: string; sample: number }; xp: number; streak: number };
 export const AppCtx = createContext<{ meta: Meta; user: User; refreshUser: () => void; toast: (s: string) => void }>(null as any);
 export const useApp = () => useContext(AppCtx);
+
+/** Địa chỉ để máy khác trong mạng mở được (thay localhost bằng IP mạng LAN). */
+export function shareUrl(meta: Meta) {
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+  return local && meta.lanIps?.length ? `${location.protocol}//${meta.lanIps[0]}${location.port ? ':' + location.port : ''}` : location.origin;
+}
 
 export function topicName(meta: Meta, code: string | null | undefined) {
   return meta.topics.find((t) => t.code === code)?.name ?? 'Chưa gắn chuyên đề';

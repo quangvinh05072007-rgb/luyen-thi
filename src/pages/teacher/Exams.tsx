@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { download, get, post } from '../../api';
 import { MathText } from '../../ui/MathText';
-import { ErrorBox, fmtDate, go, LevelBadge, Loading, topicName, useApp, useAsync } from '../../ui/kit';
+import { shareUrl, ErrorBox, fmtDate, go, LevelBadge, Loading, topicName, useApp, useAsync } from '../../ui/kit';
 
 export function Exams() {
   const { data, error, loading, reload } = useAsync(() => get('/api/exams'), []);
@@ -121,7 +121,7 @@ export function ExamDetail({ id }: { id: number }) {
             <option value="after_close">Sau khi đóng bài (chống lộ đáp án)</option>
           </select>
         </div>
-        <p className="tiny muted">Mỗi học sinh nhận thứ tự câu và phương án riêng. Đồng hồ do máy chủ giữ; hết giờ máy chủ tự nộp bản lưu cuối.</p>
+        <p className="tiny muted">Mỗi học sinh nhận thứ tự câu và phương án riêng. Đồng hồ do máy chủ giữ; hết giờ máy chủ tự nộp bản lưu cuối. Học sinh vào địa chỉ <b>{shareUrl(meta)}</b> (cùng mạng với máy này).</p>
         <div>
           <button className="btn primary big" disabled={busy || !classIds.length} onClick={assign}>
             Giao cho {classIds.length || '…'} lớp

@@ -228,3 +228,15 @@ table.t tr.click:hover td { background: var(--surface-2); }
 .hist-labels span { flex: 1; text-align: center; }
 .prewrap { white-space: pre-wrap; }
 .kbd { font-family: ui-monospace, Consolas, monospace; font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; }
+
+/* ---------- phiếu tài khoản (in) ---------- */
+.slips { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.slip { border: 1px dashed var(--ink-3); border-radius: 8px; padding: 10px 12px; break-inside: avoid; }
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+  .modal-bg { background: none; position: static; }
+  .no-print { display: none; }
+  .slips { grid-template-columns: repeat(3, 1fr); }
+}

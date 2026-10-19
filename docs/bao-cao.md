@@ -69,3 +69,14 @@ nhập đề → gắn nhãn → duyệt → sinh đề → giao → thi online 
 3. **Nhập danh sách lớp hàng loạt** từ Excel và in phiếu tài khoản; SSO nếu Sở có.
 4. **Hiệu chỉnh mô hình năng lực** bằng dữ liệu thật (IRT 2 tham số cho câu đủ lượt làm), dùng độ khó thật để sinh đề.
 5. **Chạy thử AI với khóa thật** và đo chất lượng: tỉ lệ câu AI tạo được giáo viên duyệt không sửa, độ chính xác đọc ảnh đề.
+
+## 6. Bản 0.2 — sẵn sàng dùng (19/10/2026)
+
+- Thiết lập lần đầu trên trình duyệt: tạo trường thật + tài khoản quản lý (tùy chọn kèm 64 câu mẫu), hoặc trường mẫu. Không còn tự tạo trường mẫu; trang đăng nhập chỉ hiện tài khoản mẫu khi đang chạy trường mẫu.
+- Nhập danh sách học sinh/giáo viên hàng loạt (dán từ Excel, bỏ qua dòng tiêu đề và cột STT, tự tạo lớp, tên đăng nhập không trùng), in phiếu tài khoản, tải CSV.
+- Sao lưu tự động (khởi động + mỗi 6 giờ, giữ 14 bản) bằng `VACUUM INTO`, nút sao lưu ngay; `npm run reset` chép bản cũ trước khi xóa.
+- Máy chủ in địa chỉ mạng LAN; phiếu tài khoản và trang giao đề ghi địa chỉ đó cho học sinh.
+- `Chay SmartExam.bat`: bấm đúp để cài, build, chạy và mở trình duyệt.
+
+Kiểm thử: `npm run check` → **50/50 test đạt** (thêm `tests/setup.test.mjs`: thiết lập, nhập hàng loạt, sao lưu đọc lại được). Dùng thử trong trình duyệt: màn hình thiết lập → "Dùng trường mẫu" → nhập danh sách 2 học sinh có dòng tiêu đề → phiếu tài khoản hiện đúng.
+Chưa thử: học sinh truy cập thật từ máy khác qua mạng LAN (phụ thuộc tường lửa Windows của máy chủ); bấm đúp file `.bat` trên máy chưa cài thư viện.

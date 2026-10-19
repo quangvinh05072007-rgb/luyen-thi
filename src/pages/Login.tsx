@@ -1,5 +1,5 @@
-import { FormEvent, useState } from 'react';
-import { post } from '../api';
+import { FormEvent, useEffect, useState } from 'react';
+import { get, post } from '../api';
 import { Mascot, User } from '../ui/kit';
 
 const DEMO = [
@@ -13,6 +13,10 @@ export function Login({ onLogin }: { onLogin: (u: User) => void }) {
   const [password, setP] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sample, setSample] = useState(false);
+  useEffect(() => {
+    get('/api/demo').then((r) => setSample(r.sample)).catch(() => {});
+  }, []);
 
   const submit = async (e?: FormEvent, u = username, p = password) => {
     e?.preventDefault();
@@ -50,7 +54,7 @@ export function Login({ onLogin }: { onLogin: (u: User) => void }) {
             {busy ? 'Đang đăng nhập…' : 'Đăng nhập'}
           </button>
         </form>
-        <div className="card flat mt demo-accounts">
+        {sample && <div className="card flat mt demo-accounts">
           <div className="row between mb">
             <h3 style={{ margin: 0 }}>Tài khoản mẫu</h3>
             <span className="badge amber">Dữ liệu mẫu</span>
@@ -64,7 +68,7 @@ export function Login({ onLogin }: { onLogin: (u: User) => void }) {
               </button>
             ))}
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );
