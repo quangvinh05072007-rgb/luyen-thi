@@ -26,6 +26,7 @@ test('LaTeX → OMML: phân số, căn, mũ, chỉ số, tích phân, giới h�
   assert.match(latexToOmml('\\lim_{x\\to 0} f(x)'), /<m:limLow><m:e>.*lim.*<\/m:e><m:lim>.*→.*<\/m:lim><\/m:limLow>/);
   assert.match(latexToOmml('\\vec{u}'), /<m:acc><m:accPr><m:chr m:val="⃗"\/>/);
   assert.match(latexToOmml('\\begin{cases} x=1 \\\\ y=2 \\end{cases}'), /<m:eqArr><m:e>.*<\/m:e><m:e>.*<\/m:e><\/m:eqArr>/);
+  assert.ok(!latexToOmml('x^2\\big|_0^1').includes('big'), 'lệnh cỡ ngoặc không in thành chữ');
   assert.match(latexToOmml('\\alpha \\le \\pi'), /α≤π|α.*≤.*π/);
   assert.match(latexToOmml('\\left( \\dfrac{1}{2} \\right)'), /<m:d><m:dPr><m:begChr m:val="\("\/><m:endChr m:val="\)"\/>/);
   // XML phải hợp lệ: đếm thẻ mở/đóng
@@ -87,4 +88,17 @@ test('Đoạn văn trộn chữ và công thức', async () => {
   const buf = await buildDocx([paragraph('Cho $x^2=4$, tìm $x$.')]);
   const { text } = await readDocx(buf);
   assert.equal(text.replace(/\s+/g, ' '), 'Cho $x^2=4$ , tìm $x$ .');
+});
+
+test('File đề soạn bằng Microsoft Word thật: đọc Equation, đáp án gạch chân, tiêu đề phần', async () => {
+  const fs = await import('node:fs');
+  const { importFile } = await import('../server/importers.mjs');
+  const r = await importFile('de.docx', fs.readFileSync(new URL('./fixtures/de-soan-bang-word.docx', import.meta.url)), null);
+  assert.equal(r.info.equations, 2);
+  const [a, b] = r.questions;
+  assert.equal(a.stem, 'Giá trị của biểu thức $\\frac{1}{2}+\\sqrt{4}$ bằng');
+  assert.equal(a.answer, 1);
+  assert.equal(b.type, 'short');
+  assert.equal(b.answer, '1');
+  assert.equal(b.topic, 'T12.NGUYENHAM');
 });

@@ -1003,7 +1003,7 @@ export function createApp(config = {}) {
     const weakTopics = Object.values(
       computeMastery(db.all('SELECT topic, level, score, at FROM evidence WHERE school_id = ? AND topic IS NOT NULL AND at > ?', sid, since), now()),
     ).sort((a, b) => a.value - b.value).slice(0, 5);
-    return { classes, grades: Object.values(grades).map((g) => ({ ...g, avg: g.n ? g.sum / g.n : null })), teachers, bank, weakTopics };
+    return { classes, grades: Object.values(grades).sort((a, b) => b.grade - a.grade).map((g) => ({ ...g, avg: g.n ? g.sum / g.n : null })), teachers, bank, weakTopics };
   });
   route('GET', '/api/admin/users', ['admin'], ({ user }) => ({
     users: db.all('SELECT u.id, u.role, u.username, u.display_name, u.class_id, c.name class_name, u.active, u.created_at FROM users u LEFT JOIN classes c ON c.id = u.class_id WHERE u.school_id = ? ORDER BY u.role, c.name, u.display_name', user.school_id),

@@ -222,7 +222,7 @@ class Parser {
       return { t: 'run', text: g.split('').map((x) => BB[x] ?? x).join('') };
     }
     if (c === 'mathbf' || c === 'boldsymbol' || c === 'mathit') return this.arg();
-    if (c === 'displaystyle' || c === 'limits' || c === 'nolimits' || c === 'textstyle') return null;
+    if (['displaystyle', 'limits', 'nolimits', 'textstyle', 'big', 'Big', 'bigg', 'Bigg', 'bigl', 'bigr', 'Bigl', 'Bigr'].includes(c)) return null;
     if (c in SPACES) return SPACES[c] ? { t: 'run', text: SPACES[c] } : null;
     if (SYMBOLS[c]) return { t: 'run', text: SYMBOLS[c] };
     if ('{}%$#_|'.includes(c)) return { t: 'run', text: c === '|' ? '‖' : c };

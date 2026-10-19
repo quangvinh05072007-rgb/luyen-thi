@@ -100,7 +100,7 @@ review_items (sổ lỗi sai), activity (chuỗi ngày, XP), audit_log, sessions
 | Giai đoạn | Nội dung | Trạng thái |
 |---|---|---|
 | 0 | Tài liệu, khung dự án | xong |
-| 1 | Lát cắt dọc: nhập → gắn nhãn → sinh đề → giao → thi → chấm → chẩn đoán → luyện lại | xem báo cáo |
-| 2 | Phân tích câu hỏi, bản đồ nhiệt, sổ lỗi sai giãn cách, xuất Word OMML, quản lý trường | xem báo cáo |
+| 1 | Lát cắt dọc: nhập → gắn nhãn → sinh đề → giao → thi → chấm → chẩn đoán → luyện lại | xong, đã kiểm thử (docs/bao-cao.md) |
+| 2 | Phân tích câu hỏi, bản đồ nhiệt, sổ lỗi sai giãn cách, xuất Word OMML, quản lý trường | xong bản đầu |
 | 3 | AI: ảnh → đề, sinh câu tương tự, lời giải | khung có, cần khóa để chạy |
 | 4 | SSO, OCR ngoại tuyến, IRT, ứng dụng di động | định hướng |
