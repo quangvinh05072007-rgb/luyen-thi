@@ -7,9 +7,10 @@ import { hashPassword, verifyPassword, newToken, tempPassword, LoginLimiter, par
 import { importFile, importText } from './importers.mjs';
 import { makeAi } from './ai.mjs';
 import { gradeAttempt, gradeQuestion } from '../shared/grading.mjs';
-import { generateExam, makeVariant, toOriginalResponse, OFFICIAL_BLUEPRINT } from '../shared/generate.mjs';
+import { hashSeed } from '../shared/rng.mjs';
+import { generateExam, makeVariant, makeVariants, variantLayout, assignVariants, toOriginalResponse, OFFICIAL_BLUEPRINT } from '../shared/generate.mjs';
 import { diagnoseAttempt, diagnoseItem, computeMastery, recommend, updateReview, selectPractice } from '../shared/diagnose.mjs';
-import { examToDocx } from '../shared/exportExam.mjs';
+import { examToDocx, crossAnswerKey } from '../shared/exportExam.mjs';
 import { TOPICS, TOPIC_BY_CODE, LEVELS, SOURCES, SOURCE_HINT, ERROR_TYPES, QUESTION_TYPES } from '../shared/topics.mjs';
 import { CSV_TEMPLATE } from '../shared/sheet.mjs';
 import { seedSample } from './seed.mjs';
@@ -405,8 +406,8 @@ export function createApp(config = {}) {
   function insertQuestion(user, q, source, status = 'draft', extra = {}) {
     const t = now();
     const r = db.run(
-      `INSERT INTO questions (school_id, type, stem, options_json, answer_json, explanation, topic, level, source, status, distractors_json, origin, parent_id, tag_confidence, created_by, approved_by, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO questions (school_id, type, stem, options_json, answer_json, explanation, topic, level, source, status, distractors_json, origin, parent_id, tag_confidence, created_by, approved_by, created_at, updated_at, group_id)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       user.school_id,
       q.type,
       String(q.stem ?? ''),
@@ -425,6 +426,7 @@ export function createApp(config = {}) {
       status === 'approved' ? user.id : null,
       t,
       t,
+      q.group_id ? String(q.group_id).slice(0, 40) : null,
     );
     return Number(r.lastInsertRowid);
   }
@@ -444,7 +446,7 @@ export function createApp(config = {}) {
       if (errs.length) fail(400, `Câu đã duyệt phải hợp lệ: ${errs.join(' ')}`);
     }
     db.run(
-      'UPDATE questions SET type = ?, stem = ?, options_json = ?, answer_json = ?, explanation = ?, topic = ?, level = ?, distractors_json = ?, tag_confidence = 1, updated_at = ? WHERE id = ?',
+      'UPDATE questions SET type = ?, stem = ?, options_json = ?, answer_json = ?, explanation = ?, topic = ?, level = ?, distractors_json = ?, group_id = ?, tag_confidence = 1, updated_at = ? WHERE id = ?',
       merged.type,
       merged.stem,
       JSON.stringify(merged.options ?? []),
@@ -453,6 +455,7 @@ export function createApp(config = {}) {
       merged.topic,
       Number(merged.level),
       JSON.stringify(merged.distractors ?? {}),
+      merged.group_id ? String(merged.group_id).slice(0, 40) : null,
       now(),
       q.id,
     );
@@ -540,9 +543,8 @@ export function createApp(config = {}) {
       if (!q) fail(400, `Câu #${it.qid} không có trong ngân hàng của trường.`);
       if (q.status !== 'approved') fail(400, `Câu #${it.qid} chưa được duyệt. Chỉ câu đã duyệt mới vào đề.`);
     }
-    const nVar = Math.min(8, Math.max(1, Number(body.variants) || 4));
-    const variants = Array.from({ length: nVar }, (_, i) => ({ code: String(101 + i), seed: `${now()}-${i}` }));
-    const norm = items.map((x) => ({ qid: Number(x.qid), type: qmap[x.qid].type, topic: qmap[x.qid].topic, level: qmap[x.qid].level }));
+    const norm = items.map((x) => ({ qid: Number(x.qid), type: qmap[x.qid].type, topic: qmap[x.qid].topic, level: qmap[x.qid].level, group: qmap[x.qid].group_id ?? null }));
+    const variants = makeVariants(norm, Number(body.variants) || 4, body.seed ?? `${user.id}-${now()}`);
     const r = db.run(
       'INSERT INTO exams (school_id, title, blueprint_json, items_json, duration_min, variants_json, snapshot_json, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
       user.school_id,
@@ -569,12 +571,17 @@ export function createApp(config = {}) {
     if (!e) fail(404, 'Không tìm thấy đề.');
     return { exam: { id: e.id, title: e.title, durationMin: e.duration_min, items: e.items, variants: e.variants.map((v) => v.code), blueprint: e.blueprint }, questions: e.snapshot };
   });
+  route('GET', '/api/exams/:id/answer-key', STAFF, ({ user, params }) => {
+    const e = db.get('SELECT * FROM exams WHERE id = ? AND school_id = ?', params.id, user.school_id);
+    if (!e) fail(404, 'Không tìm thấy đề.');
+    return crossAnswerKey(e.items, e.variants.map((v) => ({ code: v.code, layout: variantLayout(e.id, e.items, v) })), e.snapshot);
+  });
   route('GET', '/api/exams/:id/docx', STAFF, async ({ user, params, query, ip }) => {
     const e = db.get('SELECT * FROM exams WHERE id = ? AND school_id = ?', params.id, user.school_id);
     if (!e) fail(404, 'Không tìm thấy đề.');
     const school = db.get('SELECT name FROM schools WHERE id = ?', user.school_id);
-    const variants = e.variants.map((v) => ({ code: v.code, layout: makeVariant(e.items, `${e.id}-${v.seed}`) }));
-    const buf = await examToDocx({ title: e.title, school: school.name, durationMin: e.duration_min }, variants, e.snapshot, { withSolutions: query.solutions === '1' });
+    const variants = e.variants.map((v) => ({ code: v.code, layout: variantLayout(e.id, e.items, v) }));
+    const buf = await examToDocx({ title: e.title, school: school.name, durationMin: e.duration_min }, variants, e.snapshot, { withSolutions: query.solutions === '1', baseItems: e.items });
     audit(user, 'exam_export_docx', `#${e.id}`, ip);
     const safe = e.title.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^\w-]+/g, '-').slice(0, 60);
     return { __file: { name: `${safe || 'de-thi'}.docx`, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: buf } };
@@ -627,11 +634,23 @@ export function createApp(config = {}) {
     const closeAt = Number(body.closeAt) || openAt + 7 * 86400000;
     if (closeAt <= openAt) fail(400, 'Giờ đóng phải sau giờ mở.');
     const duration = Math.max(5, Number(body.durationMin) || exam.duration_min);
+    const codes = exam.variants.map((v) => v.code);
+    const variantMode = body.variantMode === 'list' ? 'list' : 'random';
+    const list = variantMode === 'list' && body.variantList && typeof body.variantList === 'object' ? body.variantList : {};
+    const plans = classIds.map((c) => {
+      const studentIds = db.all("SELECT id FROM users WHERE class_id = ? AND school_id = ? AND role = 'student' AND active = 1 ORDER BY id", c, user.school_id).map((r) => r.id);
+      const own = Object.fromEntries(Object.entries(list).filter(([sid]) => studentIds.includes(Number(sid))));
+      const res = assignVariants({ studentIds, codes, mode: variantMode, seed: `${exam.id}-${c}-${body.variantSeed ?? now()}`, list: own });
+      if (res.errors.length) fail(400, res.errors.join(' '));
+      return res.map;
+    });
+    const covered = new Set(plans.flatMap((m) => Object.keys(m)));
+    for (const sid of Object.keys(list)) if (!covered.has(String(sid))) fail(400, `Học sinh #${sid} không thuộc lớp được giao.`);
     const ids = db.tx(() =>
-      classIds.map((c) =>
+      classIds.map((c, i) =>
         Number(
           db.run(
-            'INSERT INTO assignments (school_id, exam_id, class_id, mode, title, open_at, close_at, duration_min, show_result, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+            'INSERT INTO assignments (school_id, exam_id, class_id, mode, title, open_at, close_at, duration_min, show_result, created_by, created_at, variant_mode, variant_map_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
             user.school_id,
             exam.id,
             c,
@@ -643,12 +662,20 @@ export function createApp(config = {}) {
             body.showResult === 'after_close' ? 'after_close' : 'after_submit',
             user.id,
             now(),
+            variantMode,
+            JSON.stringify(plans[i]),
           ).lastInsertRowid,
         ),
       ),
     );
     audit(user, 'assignment_create', `đề #${exam.id} → lớp ${classIds.join(',')}`, ip);
     return { ids };
+  });
+  route('GET', '/api/assignments/:id/variants', STAFF, ({ user, params }) => {
+    const a = db.get('SELECT * FROM assignments WHERE id = ? AND school_id = ?', params.id, user.school_id);
+    if (!a || !teacherClassIds(user).includes(a.class_id)) fail(404, 'Không tìm thấy bài giao.');
+    const students = db.all("SELECT id, display_name FROM users WHERE class_id = ? AND role = 'student' AND active = 1 ORDER BY display_name", a.class_id);
+    return { mode: a.variant_mode, students: students.map((s) => ({ id: s.id, name: s.display_name, code: a.variant_map?.[s.id] ?? null })) };
   });
   route('GET', '/api/assignments', STAFF, ({ user }) => {
     const ids = teacherClassIds(user);
@@ -825,10 +852,15 @@ export function createApp(config = {}) {
     if (t < a.open_at) fail(400, 'Bài chưa mở. Quay lại đúng giờ mở bài.');
     if (t > a.close_at) fail(400, 'Bài đã đóng. Hỏi giáo viên nếu cần làm bù.');
     const exam = db.get('SELECT * FROM exams WHERE id = ?', a.exam_id);
-    const layout = makeVariant(exam.items, `${a.id}-${user.id}-${exam.id}`);
+    // Mã đề: theo bảng chia của bài giao; em vào lớp sau khi giao thì chia theo băm cố định.
+    const codes = exam.variants.map((v) => v.code);
+    let code = a.variant_map?.[user.id];
+    if (!codes.includes(code)) code = codes[hashSeed(`${a.id}-${user.id}`) % codes.length];
+    const variant = exam.variants.find((v) => v.code === code);
+    const layout = variantLayout(exam.id, exam.items, variant);
     const deadline = a.mode === 'exam' ? Math.min(t + a.duration_min * 60000, a.close_at) : a.close_at;
     const r = db.run(
-      'INSERT INTO attempts (school_id, assignment_id, student_id, kind, title, layout_json, started_at, deadline_at, client_id) VALUES (?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO attempts (school_id, assignment_id, student_id, kind, title, layout_json, started_at, deadline_at, client_id, variant_code) VALUES (?,?,?,?,?,?,?,?,?,?)',
       user.school_id,
       a.id,
       user.id,
@@ -838,6 +870,7 @@ export function createApp(config = {}) {
       t,
       deadline,
       String(body.clientId ?? '').slice(0, 40) || null,
+      code,
     );
     audit(user, 'attempt_start', `bài giao #${a.id}`, ip);
     return attemptView(getAttempt(Number(r.lastInsertRowid)));

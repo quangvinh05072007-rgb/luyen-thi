@@ -2,6 +2,33 @@
 import { paragraph, table, pageBreak, buildDocx } from './docx.mjs';
 import { displayedAnswer } from './generate.mjs';
 
+const PART_ROMAN = { mcq: 'I', tf: 'II', short: 'III' };
+
+/**
+ * Bảng đáp án chéo: mỗi câu gốc (theo thứ tự đề gốc) → vị trí và đáp án ở từng mã đề.
+ * items: đề gốc [{qid,type}], variants: [{code, layout}] → { codes, rows: [{qid, type, cells: {[code]: {part, no, answer}}}] }
+ */
+export function crossAnswerKey(items, variants, qById) {
+  const pos = {};
+  for (const v of variants) {
+    const counter = {};
+    pos[v.code] = {};
+    for (const it of v.layout) {
+      counter[it.type] = (counter[it.type] ?? 0) + 1;
+      pos[v.code][it.qid] = { it, no: counter[it.type] };
+    }
+  }
+  const rows = items.map((base) => ({
+    qid: base.qid,
+    type: base.type,
+    cells: Object.fromEntries(variants.map((v) => {
+      const { it, no } = pos[v.code][base.qid];
+      return [v.code, { part: PART_ROMAN[base.type], no, answer: displayedAnswer(it, qById[base.qid]) }];
+    })),
+  }));
+  return { codes: variants.map((v) => v.code), rows };
+}
+
 const PART_TITLE = {
   mcq: 'PHẦN I. Câu trắc nghiệm nhiều phương án lựa chọn. Thí sinh trả lời từ câu 1 đến câu {n}. Mỗi câu hỏi thí sinh chỉ chọn một phương án.',
   tf: 'PHẦN II. Câu trắc nghiệm đúng sai. Thí sinh trả lời từ câu 1 đến câu {n}. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai.',
@@ -10,9 +37,10 @@ const PART_TITLE = {
 
 /**
  * exam: { title, school, durationMin }, variants: [{ code, layout: [{qid,type,perm}] }], qById: { id: question }
- * opts: { withSolutions }
+ * opts: { withSolutions, baseItems } — baseItems (đề gốc) bật bảng đáp án chéo
  */
 export function examBlocks(exam, variants, qById, opts = {}) {
+  const baseItems = opts.baseItems;
   const blocks = [];
   variants.forEach((v, vi) => {
     if (vi > 0) blocks.push(pageBreak());
@@ -54,6 +82,15 @@ export function examBlocks(exam, variants, qById, opts = {}) {
       blocks.push(table([head, row]));
       blocks.push(paragraph('', { spaceAfter: 60 }));
     }
+  }
+  if (baseItems?.length && variants.length > 1) {
+    const key = crossAnswerKey(baseItems, variants, qById);
+    blocks.push(pageBreak());
+    blocks.push(paragraph('BẢNG ĐÁP ÁN CHÉO GIỮA CÁC MÃ ĐỀ', { bold: true, align: 'center', size: 14 }));
+    blocks.push(paragraph('Mỗi ô: phần.số câu trong mã đề — đáp án.', { italic: true, spaceAfter: 60 }));
+    const head = ['Câu gốc', ...key.codes.map((c) => `Mã ${c}`)];
+    const body = key.rows.map((r, i) => [String(i + 1), ...key.codes.map((c) => `${r.cells[c].part}.${r.cells[c].no}: ${r.cells[c].answer}`)]);
+    blocks.push(table([head, ...body]));
   }
   return blocks;
 }

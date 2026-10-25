@@ -111,18 +111,70 @@ export function generateExam(pool, blueprint) {
 
 /**
  * Tạo mã đề: đảo thứ tự câu trong từng phần, đảo phương án câu trắc nghiệm.
- * items: [{qid, type}] → [{qid, type, perm}] — perm[vị trí hiển thị] = chỉ số phương án gốc.
+ * Các câu cùng `group` (chùm dữ kiện) và cùng phần luôn đi liền nhau, giữ thứ tự gốc trong chùm.
+ * items: [{qid, type, group?}] → [{qid, type, perm}] — perm[vị trí hiển thị] = chỉ số phương án gốc.
  */
 export function makeVariant(items, seed) {
   const rng = makeRng(seed);
   const out = [];
   for (const type of ['mcq', 'tf', 'short']) {
-    const part = shuffle(items.filter((x) => x.type === type), rng);
-    for (const it of part) {
-      out.push({ qid: it.qid, type, perm: type === 'mcq' ? shuffle([0, 1, 2, 3], rng) : null });
+    const units = [];
+    const byGroup = new Map();
+    for (const it of items.filter((x) => x.type === type)) {
+      if (it.group != null && it.group !== '' && byGroup.has(it.group)) byGroup.get(it.group).push(it);
+      else {
+        const unit = [it];
+        units.push(unit);
+        if (it.group != null && it.group !== '') byGroup.set(it.group, unit);
+      }
+    }
+    for (const unit of shuffle(units, rng)) {
+      for (const it of unit) out.push({ qid: it.qid, type, perm: type === 'mcq' ? shuffle([0, 1, 2, 3], rng) : null });
     }
   }
   return out;
+}
+
+export const MAX_VARIANTS = 8;
+export const FIRST_VARIANT_CODE = 101;
+
+/** Sinh n mã đề (1..8) từ một đề gốc; cùng baseSeed → cùng kết quả. Trả [{code, seed, layout}]. */
+export function makeVariants(items, n, baseSeed) {
+  const count = Math.min(MAX_VARIANTS, Math.max(1, Math.floor(Number(n)) || 1));
+  return Array.from({ length: count }, (_, i) => {
+    const seed = `${baseSeed}-${i}`;
+    return { code: String(FIRST_VARIANT_CODE + i), seed, layout: makeVariant(items, seed) };
+  });
+}
+
+/** Bố cục của một mã đề; đề cũ chưa lưu layout thì sinh lại từ seed như trước đây. */
+export function variantLayout(examId, items, variant) {
+  return variant.layout ?? makeVariant(items, `${examId}-${variant.seed}`);
+}
+
+/**
+ * Chia mã đề cho học sinh. mode 'random': chia đều, thứ tự xáo theo seed (tái lập được).
+ * mode 'list': list = { [studentId]: code }; em không có trong danh sách được chia ngẫu nhiên đều phần còn lại.
+ * Trả { map: { [studentId]: code }, errors: [] }.
+ */
+export function assignVariants({ studentIds, codes, mode = 'random', seed = 'assign', list = {} }) {
+  const errors = [];
+  const map = {};
+  let rest = studentIds.slice();
+  if (mode === 'list') {
+    for (const [sid, code] of Object.entries(list ?? {})) {
+      if (!studentIds.map(String).includes(String(sid))) errors.push(`Học sinh #${sid} không thuộc lớp.`);
+      else if (!codes.includes(String(code))) errors.push(`Mã đề ${code} không có trong đề.`);
+      else map[sid] = String(code);
+    }
+    rest = studentIds.filter((id) => map[id] == null);
+  }
+  const rng = makeRng(`${seed}-assign`);
+  const order = shuffle(codes, rng);
+  shuffle(rest, rng).forEach((id, i) => {
+    map[id] = order[i % order.length];
+  });
+  return { map, errors };
 }
 
 /** Đổi câu trả lời hiển thị (theo mã đề) về không gian phương án gốc. */

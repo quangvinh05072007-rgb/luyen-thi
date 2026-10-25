@@ -73,6 +73,21 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 `;
 
+/** Cột thêm sau bản đầu: thêm vào CSDL cũ mà không mất dữ liệu (chạy lại nhiều lần vẫn an toàn). */
+const ADDED_COLUMNS = [
+  ['questions', 'group_id', 'TEXT'],
+  ['attempts', 'variant_code', 'TEXT'],
+  ['assignments', 'variant_mode', "TEXT NOT NULL DEFAULT 'random'"],
+  ['assignments', 'variant_map_json', 'TEXT'],
+];
+
+export function migrate(db) {
+  for (const [table, col, def] of ADDED_COLUMNS) {
+    const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col);
+    if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+  }
+}
+
 const JSON_COLS = /_json$/;
 
 /** Đổi hàng có cột *_json thành đối tượng (bỏ hậu tố _json). */
@@ -90,6 +105,7 @@ export function openDb(file) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec(SCHEMA);
+  migrate(db);
   const api = {
     raw: db,
     all(sql, ...p) {
@@ -143,5 +159,6 @@ export function toQuestion(row) {
     created_at: r.created_at,
     updated_at: r.updated_at,
     sample: r.sample,
+    group_id: r.group_id ?? null,
   };
 }

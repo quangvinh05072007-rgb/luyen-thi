@@ -80,3 +80,19 @@ nhập đề → gắn nhãn → duyệt → sinh đề → giao → thi online 
 
 Kiểm thử: `npm run check` → **50/50 test đạt** (thêm `tests/setup.test.mjs`: thiết lập, nhập hàng loạt, sao lưu đọc lại được). Dùng thử trong trình duyệt: màn hình thiết lập → "Dùng trường mẫu" → nhập danh sách 2 học sinh có dòng tiêu đề → phiếu tài khoản hiện đúng.
 Chưa thử: học sinh truy cập thật từ máy khác qua mạng LAN (phụ thuộc tường lửa Windows của máy chủ); bấm đúp file `.bat` trên máy chưa cài thư viện.
+
+## 7. Bản 0.3 — Nâng cấp 1: nhiều mã đề (25/10/2026)
+
+**Đã làm (có test):**
+- `makeVariants(items, n, seed)` sinh 1–8 mã (101…108); layout từng mã được **lưu bền** trong `exams.variants_json`; đề cũ chưa có layout vẫn xuất như trước (sinh lại từ seed cũ).
+- Chùm dữ kiện: cột mới `questions.group_id` (nhận qua POST/PUT câu hỏi, kèm vào `items` của đề). Câu cùng nhóm và cùng phần luôn liền nhau, giữ thứ tự gốc. Chưa có ô nhập nhóm trên giao diện và nhập Word chưa tự nhận chùm.
+- Chia mã: `assignVariants` (ngẫu nhiên đều theo seed, hoặc theo danh sách `variantList`; em ngoài danh sách chia đều phần còn lại). `POST /api/assignments` nhận `variantMode`, `variantList`, `variantSeed`; lưu `assignments.variant_map_json`; `attempts.variant_code` ghi mã đã thi. Thay đổi hành vi: trước đây mỗi học sinh một bản đảo riêng, nay thi theo đúng mã in trong Word.
+- API mới: `GET /api/exams/:id/answer-key` (đáp án chéo), `GET /api/assignments/:id/variants` (mã của từng em, chỉ giáo viên phụ trách lớp).
+- Word: thêm trang "Bảng đáp án chéo giữa các mã đề"; công thức OMML không đổi.
+- Di trú `migrate()` trong `server/db.mjs`: thêm 4 cột vào CSDL cũ, chạy lại an toàn.
+- Test mới `tests/variants.test.mjs` (8 test): cùng seed → cùng kết quả, chùm liền nhau, đáp án đúng sau đảo, cùng lựa chọn → cùng điểm ở 8 mã, đáp án chéo khớp, chia mã, di trú, luồng HTTP đầu-cuối.
+
+**Chưa làm / chưa kiểm thử:**
+- Giao diện: chưa có ô chọn chế độ chia mã / nhập nhóm câu (API sẵn sàng). Chưa kiểm thử mở file Word có bảng chéo bằng Microsoft Word thật (chỉ kiểm tra XML).
+- Bài giao cũ không có bảng chia mã: em vào lớp muộn được chia theo băm cố định.
+- Dữ liệu mẫu (`seed.mjs`) vẫn dùng layout riêng từng em, không có `variant_code`.
