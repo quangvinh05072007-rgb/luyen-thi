@@ -1061,9 +1061,15 @@ export function createApp(config = {}) {
   route('GET', '/api/classes', STAFF, ({ user }) => {
     const ids = teacherClassIds(user);
     if (!ids.length) return { classes: [] };
+    const t = now();
     const rows = db.all(
-      `SELECT c.id, c.name, c.grade, c.code, u.display_name teacher, (SELECT COUNT(*) FROM users s WHERE s.class_id = c.id AND s.role = 'student' AND s.active = 1) students
+      `SELECT c.id, c.name, c.grade, c.code, u.display_name teacher,
+              (SELECT COUNT(*) FROM users s WHERE s.class_id = c.id AND s.role = 'student' AND s.active = 1) students,
+              (SELECT COUNT(*) FROM assignments a WHERE a.class_id = c.id AND a.open_at <= ? AND a.close_at >= ?) active_assignments,
+              (SELECT COUNT(*) FROM assignments a WHERE a.class_id = c.id) total_assignments
        FROM classes c LEFT JOIN users u ON u.id = c.teacher_id WHERE c.id IN (${ids.map(() => '?').join(',')}) ORDER BY c.grade DESC, c.name`,
+      t,
+      t,
       ...ids,
     );
     return { classes: rows };

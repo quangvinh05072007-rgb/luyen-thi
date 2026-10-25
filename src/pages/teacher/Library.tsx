@@ -6,7 +6,12 @@ export function Library({ children }: { children?: ReactNode }) {
   const {path,query}=useRoute();
   const classId=query.get('classId');
   const suffix=classId&&/^\d+$/.test(classId)?`?classId=${classId}`:'';
-  const tabs=[['/thu-vien','Đề thi'],['/ngan-hang','Ngân hàng câu hỏi'],['/nhap-de','Nhập đề'],['/ra-de','Tạo đề']];
+  const tabs = [
+    ['/thu-vien', '📚 Đề thi'],
+    ['/ngan-hang', '🏦 Ngân hàng câu hỏi'],
+    ['/nhap-de', '📥 Nhập Word'],
+    ['/ra-de', '✨ Tạo đề ma trận'],
+  ];
   return <div className="stack"><nav className="section-tabs" aria-label="Đề và câu hỏi">{tabs.map(([href,label])=>{
     const active=href==='/thu-vien'?(path==='/thu-vien'||path.startsWith('/de-thi')):path===href;
     return <a key={href} href={`#${href}${suffix}`} className={active?'active':''} aria-current={active?'page':undefined}>{label}</a>;
