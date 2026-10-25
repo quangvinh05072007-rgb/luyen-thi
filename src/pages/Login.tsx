@@ -54,6 +54,7 @@ export function Login({ onLogin }: { onLogin: (u: User) => void }) {
             {busy ? 'Đang đăng nhập…' : 'Đăng nhập'}
           </button>
         </form>
+        <a className="btn ghost block mt" href="#/phu-huynh">Dành cho phụ huynh</a>
         {sample && <div className="card flat mt demo-accounts">
           <div className="row between mb">
             <h3 style={{ margin: 0 }}>Tài khoản mẫu</h3>

@@ -1,10 +1,15 @@
 import { useState } from 'react';
 import { download, get, post } from '../../api';
 import { MathText } from '../../ui/MathText';
+import { Comments } from '../../ui/Comments';
 import { shareUrl, ErrorBox, fmtDate, go, LevelBadge, Loading, topicName, useApp, useAsync } from '../../ui/kit';
 
 export function Exams() {
-  const { data, error, loading, reload } = useAsync(() => get('/api/exams'), []);
+  const [scope, setScope] = useState('all');
+  const [search, setSearch] = useState('');
+  const [dept, setDept] = useState('');
+  const { data, error, loading, reload } = useAsync(() => get(`/api/exams?scope=${scope}`), [scope]);
+  const exams = (data?.exams ?? []).filter((e: any) => (!dept || e.dept === dept) && `${e.title} ${e.author}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi')));
   return (
     <div className="stack">
       <div className="row between">
@@ -13,15 +18,24 @@ export function Exams() {
           Ra đề mới
         </a>
       </div>
+      <p className="muted">Đề của bạn và kho đề giáo viên trong trường cùng xây dựng.</p>
+      <div className="card flat stack">
+        <div className="seg" aria-label="Phạm vi đề thi">
+          {[['all', 'Tất cả'], ['mine', 'Của tôi'], ['shared', 'Dùng chung'], ['hot', 'Được dùng nhiều']].map(([value, label]) => <button key={value} className={scope === value ? 'on' : ''} aria-pressed={scope === value} onClick={() => setScope(value)}>{label}</button>)}
+        </div>
+        <div className="row"><label className="field grow">Tìm đề<input className="input" type="search" placeholder="Tên đề hoặc giáo viên" value={search} onChange={e => setSearch(e.target.value)} /></label>
+          <label className="field">Tổ chuyên môn<select className="input" value={dept} onChange={e => setDept(e.target.value)}><option value="">Tất cả tổ</option>{[...new Set<string>((data?.exams ?? []).map((e: any) => e.dept).filter(Boolean))].map(d => <option key={d}>{d}</option>)}</select></label></div>
+      </div>
       {loading && <Loading />}
       {error && <ErrorBox error={error} onRetry={reload} />}
-      {data && data.exams.length === 0 && <div className="card empty">Chưa có đề nào. Bấm "Ra đề mới" để tạo đề đầu tiên.</div>}
+      {!loading && data && exams.length === 0 && <div className="card empty">Chưa có đề khớp bộ lọc. Đổi phạm vi tìm hoặc tạo đề mới.</div>}
       {data && (
         <div className="card">
-          {data.exams.map((e: any) => (
+          {exams.map((e: any) => (
             <a key={e.id} className="list-item" href={`#/de-thi/${e.id}`} style={{ color: 'inherit' }}>
               <div className="grow">
                 <div className="strong">{e.title}</div>
+                <div className="row tiny"><span className={`badge ${e.visibility === 'school' ? 'blue' : ''}`}>{e.visibility === 'school' ? 'Dùng chung' : 'Riêng tư'}</span>{e.mine && <span className="badge">Của bạn</span>}{e.dept && <span>{e.dept}</span>}<span>{e.ratingCount ? `${e.ratingAvg}/5 (${e.ratingCount} đánh giá)` : 'Chưa có đánh giá'} · {e.uses} lượt dùng</span></div>
                 <div className="tiny muted">
                   {e.counts.mcq} TN · {e.counts.tf} Đ/S · {e.counts.short} TLN · {e.durationMin} phút · {e.author} · {fmtDate(e.createdAt)}
                 </div>
@@ -41,7 +55,7 @@ const toLocal = (ms: number) => {
 };
 
 export function ExamDetail({ id }: { id: number }) {
-  const { meta, toast } = useApp();
+  const { meta, user, toast } = useApp();
   const { data, error, loading, reload } = useAsync(async () => {
     const [e, c] = await Promise.all([get(`/api/exams/${id}`), get('/api/classes')]);
     return { ...e, classes: c.classes };
@@ -53,13 +67,20 @@ export function ExamDetail({ id }: { id: number }) {
   const [duration, setDuration] = useState<number | null>(null);
   const [showResult, setShowResult] = useState<'after_submit' | 'after_close'>('after_submit');
   const [busy, setBusy] = useState(false);
+  const [variantMode, setVariantMode] = useState('per_student');
+  const [sharing, setSharing] = useState(false);
+  const [deptDraft, setDeptDraft] = useState<string | null>(null);
+  const [rating, setRating] = useState<number | null>(null);
+  const [variantList, setVariantList] = useState<Record<string,string>>({});
+  const roster = useAsync(async () => variantMode === 'list' ? (await Promise.all(classIds.map(c => get(`/api/classes/${c}`)))).flatMap(r => r.students) : [], [variantMode,classIds.join(',')]);
   if (loading) return <Loading />;
   if (error) return <ErrorBox error={error} onRetry={reload} />;
   const exam = data.exam;
   const assign = async () => {
     setBusy(true);
     try {
-      await post('/api/assignments', { examId: id, classIds, mode, openAt: new Date(openAt).getTime(), closeAt: new Date(closeAt).getTime(), durationMin: duration ?? exam.durationMin, showResult });
+      const list = Object.fromEntries((roster.data ?? []).filter((s: any) => variantList[s.id]).map((s: any) => [s.id,variantList[s.id]]));
+      await post('/api/assignments', { examId: id, classIds, mode, variantMode, variantList:variantMode === 'list' ? list : undefined, openAt: new Date(openAt).getTime(), closeAt: new Date(closeAt).getTime(), durationMin: duration ?? exam.durationMin, showResult });
       toast(`Đã giao đề cho ${classIds.length} lớp.`);
       go('/bai-giao');
     } catch (e: any) {
@@ -71,11 +92,24 @@ export function ExamDetail({ id }: { id: number }) {
   return (
     <div className="stack">
       <div>
+        <a className="small" href="#/de-thi">Về kho đề</a>
         <h1>{exam.title}</h1>
         <div className="small muted">
           {exam.items.length} câu · {exam.durationMin} phút · mã đề {exam.variants.join(', ')}
         </div>
       </div>
+      <section className="card stack">
+        <div className="row between"><h2>Chia sẻ trong trường</h2><span className={`badge ${exam.visibility === 'school' ? 'blue' : ''}`}>{exam.visibility === 'school' ? 'Đang dùng chung' : 'Đề riêng tư'}</span></div>
+        <p className="small muted">{exam.author} · {exam.ratingCount ? `${exam.ratingAvg}/5 từ ${exam.ratingCount} đánh giá` : 'Chưa có đánh giá'}</p>
+        {(exam.mine || user.role === 'admin') && <>
+          <label className="field">Tổ chuyên môn<input className="input" maxLength={80} value={deptDraft ?? exam.dept ?? ''} onChange={e => setDeptDraft(e.target.value)} placeholder="Ví dụ: Tổ Toán" /></label>
+          <div className="row">{[['private', 'Lưu riêng tư'], ['school', 'Chia sẻ với trường']].map(([visibility, label]) => <button key={visibility} disabled={sharing} className={`btn ${visibility === 'school' ? 'primary' : ''}`} onClick={async () => {
+            setSharing(true); try { await post(`/api/exams/${id}/share`, { visibility, dept: deptDraft ?? exam.dept ?? '' }); toast('Đã lưu chia sẻ đề.'); reload(); } catch (e: any) { toast(e.message); } finally { setSharing(false); }
+          }}>{label}</button>)}</div>
+          <p className="tiny muted">Đề dùng chung cho phép giáo viên trong trường xem, xuất, nhân bản và giao cho lớp mình.</p>
+        </>}
+        {!exam.mine && exam.visibility === 'school' && <div className="row"><label className="field">Đánh giá của bạn<select className="input" value={rating ?? exam.myRating ?? ''} onChange={e => setRating(Number(e.target.value))}><option value="" disabled>Chọn số sao</option>{[1,2,3,4,5].map(n => <option key={n} value={n}>{n}/5 sao</option>)}</select></label><button className="btn" disabled={sharing || !(rating ?? exam.myRating)} onClick={async () => { setSharing(true); try { await post(`/api/exams/${id}/rate`, { stars: rating ?? exam.myRating }); toast('Đã lưu đánh giá.'); reload(); } catch (e: any) { toast(e.message); } finally { setSharing(false); } }}>Lưu đánh giá</button></div>}
+      </section>
       <div className="card stack">
         <h2>Giao đề</h2>
         <div className="field">
@@ -100,30 +134,34 @@ export function ExamDetail({ id }: { id: number }) {
         </div>
         <div className="grid-3">
           <div className="field">
-            <label>Mở lúc</label>
-            <input className="input" type="datetime-local" value={openAt} onChange={(e) => setOpenAt(e.target.value)} />
+          <label htmlFor="assign-open">Mở lúc</label>
+            <input id="assign-open" className="input" type="datetime-local" value={openAt} onChange={(e) => setOpenAt(e.target.value)} />
           </div>
           <div className="field">
-            <label>Đóng lúc</label>
-            <input className="input" type="datetime-local" value={closeAt} onChange={(e) => setCloseAt(e.target.value)} />
+            <label htmlFor="assign-close">Đóng lúc</label>
+            <input id="assign-close" className="input" type="datetime-local" value={closeAt} onChange={(e) => setCloseAt(e.target.value)} />
           </div>
           {mode === 'exam' && (
             <div className="field">
-              <label>Thời gian làm (phút)</label>
-              <input className="input" type="number" min={5} value={duration ?? exam.durationMin} onChange={(e) => setDuration(Number(e.target.value))} />
+              <label htmlFor="assign-duration">Thời gian làm (phút)</label>
+              <input id="assign-duration" className="input" type="number" min={5} value={duration ?? exam.durationMin} onChange={(e) => setDuration(Number(e.target.value))} />
             </div>
           )}
         </div>
         <div className="field">
-          <label>Học sinh xem điểm và lời giải</label>
-          <select className="input" value={showResult} onChange={(e) => setShowResult(e.target.value as any)}>
+          <label htmlFor="assign-variants">Chia mã đề</label><select id="assign-variants" className="input" value={variantMode} onChange={e => setVariantMode(e.target.value)}><option value="per_student">Mỗi học sinh một thứ tự riêng</option><option value="random">Chia ngẫu nhiên, đều các mã đã tạo</option><option value="list">Chỉ định mã cho từng học sinh</option></select>
+        </div>
+        {variantMode === 'list' && <div className="stack"><p className="tiny muted">Chọn lớp trước. Những em để tự chia sẽ được phân đều vào các mã còn lại.</p>{roster.loading && <Loading />}{roster.error && <ErrorBox error={roster.error} onRetry={roster.reload} />}{roster.data?.map((s: any) => <label className="row between small" key={s.id}>{s.name ?? s.display_name}<select className="input" style={{width:'auto'}} value={variantList[s.id] ?? ''} onChange={e => setVariantList({...variantList,[s.id]:e.target.value})}><option value="">Tự chia</option>{exam.variants.map((c: string) => <option key={c}>{c}</option>)}</select></label>)}</div>}
+        <div className="field">
+          <label htmlFor="assign-results">Học sinh xem điểm và lời giải</label>
+          <select id="assign-results" className="input" value={showResult} onChange={(e) => setShowResult(e.target.value as any)}>
             <option value="after_submit">Ngay sau khi nộp</option>
             <option value="after_close">Sau khi đóng bài (chống lộ đáp án)</option>
           </select>
         </div>
-        <p className="tiny muted">Mỗi học sinh nhận thứ tự câu và phương án riêng. Đồng hồ do máy chủ giữ; hết giờ máy chủ tự nộp bản lưu cuối. Học sinh vào địa chỉ <b>{shareUrl(meta)}</b> (cùng mạng với máy này).</p>
+        <p className="tiny muted">Đồng hồ do máy chủ giữ; hết giờ máy chủ tự nộp bản lưu cuối. Học sinh vào địa chỉ <b>{shareUrl(meta)}</b> (cùng mạng với máy này).</p>
         <div>
-          <button className="btn primary big" disabled={busy || !classIds.length} onClick={assign}>
+          <button className="btn primary big" disabled={busy || !classIds.length || (variantMode === 'list' && (roster.loading || !!roster.error))} onClick={assign}>
             Giao cho {classIds.length || '…'} lớp
           </button>
         </div>
@@ -155,6 +193,7 @@ export function ExamDetail({ id }: { id: number }) {
           </button>
         </div>
       </div>
+      <div className="card"><Comments kind="exam" id={id} /></div>
       <div className="card">
         <h2>Nội dung đề</h2>
         {exam.items.map((it: any, i: number) => {

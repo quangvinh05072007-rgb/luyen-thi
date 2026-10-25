@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { post } from '../api';
 import { useApp } from '../ui/kit';
+import { ReviewSettings } from '../ui/ReviewSettings';
 
 export function Account({ onLogout }: { onLogout: () => void }) {
   const { user, meta, toast } = useApp();
@@ -22,6 +23,7 @@ export function Account({ onLogout }: { onLogout: () => void }) {
   return (
     <div className="stack">
       <h1>Tài khoản</h1>
+      {user.role === 'admin' && <ReviewSettings />}
       <div className="card">
         <div className="strong">{user.displayName}</div>
         <div className="muted small">

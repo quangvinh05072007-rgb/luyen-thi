@@ -61,6 +61,11 @@ export function startServer({ port, viteMiddleware } = {}) {
     backup();
     setInterval(backup, 6 * 3600 * 1000).unref();
   }
+  const materializeReports = () => {
+    try { app.materializeDueReports(); } catch (e) { console.error('Tạo báo cáo định kỳ lỗi:', e.message); }
+  };
+  materializeReports();
+  setInterval(materializeReports, 60 * 1000).unref();
   const stop = () => {
     server.close();
     app.db.close();

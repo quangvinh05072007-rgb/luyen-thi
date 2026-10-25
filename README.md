@@ -41,7 +41,22 @@ Muốn làm lại từ đầu: tắt máy chủ, chạy `npm run reset` (dữ li
 Máy tự sao lưu khi khởi động và mỗi 6 giờ vào `data/backups` (giữ 14 bản), có nút **Sao lưu ngay** ở trang Người dùng.
 Chép thư mục `data/backups` ra ổ khác định kỳ. Khôi phục: tắt máy chủ, chép một bản sao lưu đè lên `data/smartexam.db`.
 
-Các lệnh khác:
+### Các chức năng đã hoàn thiện
+
+- **Đề thi:** lọc kho riêng/chung/tổ, đánh giá sao và góp ý; mở đề để chia sẻ, xuất hoặc nhân bản. Khi giao, chọn thứ tự riêng từng em, chia đều ngẫu nhiên hoặc chỉ định mã theo danh sách.
+- **Ngân hàng:** xem lịch sử, khôi phục và góp ý câu hỏi. Quản lý vào **Tài khoản → Duyệt câu hỏi** để chọn chính sách một/hai người duyệt. Với hai người, sửa nội dung, lời giải hoặc nhãn sẽ yêu cầu duyệt lại.
+- **Ra đề → Mẫu ma trận:** lưu/dùng lại cấu trúc đề. **Kết quả:** lùi giờ đóng, gia hạn/mở lại lượt thi, sửa điểm tổng có lý do. Học sinh xem phản hồi ở **Khiếu nại**.
+- **Báo cáo định kỳ:** chọn ngày Việt Nam và lớp, so sánh với kỳ trước, tải Excel hoặc lưu số liệu. Lịch tuần/tháng tạo báo cáo khi máy chủ chạy và tạo bù khi mở lại. Bài kết thúc sát nửa đêm được chờ hết ân hạn lưu trước khi đóng báo cáo. Trên điện thoại, các mục phụ nằm ở **Thêm**.
+
+### Cổng phụ huynh
+
+Giáo viên mở **Lớp → hồ sơ học sinh → Liên kết phụ huynh** để cấp mã có thời hạn. Sao chép mã và địa chỉ để gửi riêng cho gia đình; mã chỉ hiện trong lần cấp. Phụ huynh chọn **Dành cho phụ huynh** ở trang đăng nhập hoặc mở `/#/phu-huynh` để xem điểm đã công bố, tình hình nộp bài và gợi ý ôn tập của riêng con. Đổi/thu hồi mã làm mọi phiên cũ hết quyền ngay. Đây là tình hình nộp bài trên SmartExam, không phải điểm danh tại trường.
+
+### Cài ứng dụng và mất mạng
+
+Trình duyệt hỗ trợ có thể cài qua **Cài ứng dụng** hoặc **Thêm vào màn hình chính**. Service worker cần **HTTPS hoặc localhost**; địa chỉ IP LAN qua HTTP vẫn dùng được bằng trình duyệt. Chế độ ngoại tuyến không cache điểm, đề hay dữ liệu cá nhân. Nếu mất mạng khi thi, giữ trang bài làm đang mở để gửi lại dữ liệu khi có mạng. Bản cập nhật chỉ tải lại sau khi người dùng đồng ý.
+
+### Lệnh hỗ trợ
 
 - `npm run dev` — chế độ phát triển (API + Vite, một cổng 4700).
 - `npm run check` — kiểm tra kiểu + toàn bộ test + build.

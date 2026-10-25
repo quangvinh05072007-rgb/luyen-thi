@@ -48,11 +48,13 @@ export function topicName(meta: Meta, code: string | null | undefined) {
 export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   const [state, set] = useState<{ data: T | null; error: string | null; loading: boolean }>({ data: null, error: null, loading: true });
   const alive = useRef(true);
+  const generation = useRef(0);
   const run = useCallback(() => {
+    const request = ++generation.current;
     set((s) => ({ ...s, loading: true, error: null }));
     fn()
-      .then((data) => alive.current && set({ data, error: null, loading: false }))
-      .catch((e: ApiError) => alive.current && set({ data: null, error: e.message, loading: false }));
+      .then((data) => alive.current && request === generation.current && set({ data, error: null, loading: false }))
+      .catch((e: ApiError) => alive.current && request === generation.current && set({ data: null, error: e.message, loading: false }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   useEffect(() => {
@@ -60,6 +62,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
     run();
     return () => {
       alive.current = false;
+      generation.current++;
     };
   }, [run]);
   return { ...state, reload: run, setData: (d: T) => set({ data: d, error: null, loading: false }) };
@@ -86,14 +89,29 @@ export function ErrorBox({ error, onRetry }: { error: string; onRetry?: () => vo
 }
 
 export function Modal({ children, onClose, title }: { children: ReactNode; onClose: () => void; title?: string }) {
+  const container = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
-    const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const previous = document.activeElement as HTMLElement | null;
+    const selector = 'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]';
+    (container.current?.querySelector<HTMLElement>(selector) ?? container.current)?.focus();
+    const k = (e: KeyboardEvent) => {
+      if(e.key === 'Escape') { e.preventDefault(); close.current(); }
+      if(e.key === 'Tab') {
+        const nodes = [...(container.current?.querySelectorAll<HTMLElement>(selector) ?? [])].filter(n => n.getClientRects().length);
+        const first = nodes[0], last = nodes[nodes.length - 1];
+        if(!first) { e.preventDefault(); return; }
+        if(e.shiftKey && (document.activeElement === first || !container.current?.contains(document.activeElement))) {e.preventDefault();last.focus();}
+        else if(!e.shiftKey && document.activeElement === last) {e.preventDefault();first.focus();}
+      }
+    };
     window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
-  }, [onClose]);
+    return () => { window.removeEventListener('keydown', k); if(previous?.isConnected) previous.focus(); };
+  }, []);
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
+      <div ref={container} tabIndex={-1} className="modal" role="dialog" aria-modal="true" aria-label={title}>
         {title && (
           <div className="row between mb">
             <h2 style={{ margin: 0 }}>{title}</h2>

@@ -3,7 +3,7 @@ import { useId } from 'react';
 import { MathText } from './MathText';
 import { useApp } from './kit';
 
-export type Draft = { type: 'mcq' | 'tf' | 'short'; stem: string; options: string[]; answer: any; explanation: string; topic: string | null; level: number; distractors?: any };
+export type Draft = { type: 'mcq' | 'tf' | 'short'; stem: string; options: string[]; answer: any; explanation: string; topic: string | null; level: number; distractors?: any; group_id?: string | null };
 
 export function QuestionEditor({ q, onChange }: { q: Draft; onChange: (q: Draft) => void }) {
   const { meta } = useApp();
@@ -54,6 +54,7 @@ export function QuestionEditor({ q, onChange }: { q: Draft; onChange: (q: Draft)
           ))}
         </select>
       </div>
+      <label className="field">Nhóm câu dùng chung dữ kiện (nếu có)<input className="input" maxLength={40} value={q.group_id ?? ''} onChange={e => set({group_id:e.target.value || null})} placeholder="Các câu cùng nhóm sẽ nằm liền nhau khi đảo đề" /></label>
       <div className="field">
         <label>Đề bài (công thức viết trong $…$, ví dụ $\frac{'{1}{2}'}$)</label>
         <textarea className="input" value={q.stem} onChange={(e) => set({ stem: e.target.value })} />

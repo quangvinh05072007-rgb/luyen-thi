@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { get, post } from '../../api';
 import { Bar, ErrorBox, ErrorTypeBadge, fmtDateTime, fmtScore, Loading, pct, scoreColor, useApp, useAsync } from '../../ui/kit';
 import { AttemptReview, ResultSummary } from '../student/Result';
+import { FamilyAccess } from '../../ui/FamilyAccess';
+import { AttemptActions } from '../../ui/StaffActions';
 
 function heatColor(v: number | undefined) {
   if (v === undefined) return { background: 'var(--surface-2)', color: 'var(--ink-3)' };
@@ -263,6 +265,7 @@ export function StudentProfilePage({ id }: { id: number }) {
         <div className="muted small">Lớp {data.student.class?.name}</div>
       </div>
       <ProfileView data={data} />
+      <FamilyAccess studentId={id} />
     </div>
   );
 }
@@ -273,7 +276,7 @@ export function TeacherAttemptView({ id }: { id: number }) {
   const { data, error, loading, reload } = useAsync(() => get(`/api/teacher/attempts/${id}`), [id]);
   if (loading) return <Loading />;
   if (error) return <ErrorBox error={error} onRetry={reload} />;
-  if (!data.result) return <div className="card">Bài đang làm, chưa có kết quả.</div>;
+  if (!data.result) return <div className="card stack"><h1>{data.student}</h1><p>Bài đang làm, chưa có kết quả.</p>{data.kind === 'assignment' && <AttemptActions attemptId={id} status={data.status} onDone={reload} />}</div>;
   return (
     <div className="stack">
       <div className="card">
@@ -299,6 +302,7 @@ export function TeacherAttemptView({ id }: { id: number }) {
         )}
       </div>
       <ResultSummary data={data} />
+      {data.kind === 'assignment' && <div className="card"><AttemptActions attemptId={id} status={data.status} onDone={reload} /></div>}
       <AttemptReview data={data} />
     </div>
   );

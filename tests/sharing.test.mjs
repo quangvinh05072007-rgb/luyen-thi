@@ -182,9 +182,11 @@ test('Duyệt hai người: chính sách do quản lý đặt; một người du
   assert.equal(app.db.get('SELECT status FROM questions WHERE id = ?', q).status, 'approved');
   assert.equal(audits('question_approve_first').length, 2);
 
-  // sửa nội dung câu đã duyệt → về nháp, lượt duyệt cũ bị xóa; sửa lời giải thì không
+  // Sửa lời giải cũng cần duyệt lại theo chính sách hai người.
   assert.equal((await lan.put(`/api/questions/${q}`, { explanation: 'Chỉ sửa lời giải' })).status, 200);
-  assert.equal(app.db.get('SELECT status FROM questions WHERE id = ?', q).status, 'approved');
+  assert.equal(app.db.get('SELECT status FROM questions WHERE id = ?', q).status, 'draft');
+  await lan.post('/api/questions/approve', { ids: [q] });
+  await minh.post('/api/questions/approve', { ids: [q] });
   assert.equal((await lan.put(`/api/questions/${q}`, { stem: 'Câu cần hai người duyệt (đã sửa đề)' })).status, 200);
   const after = app.db.get('SELECT status, approvals_json FROM questions WHERE id = ?', q);
   assert.equal(after.status, 'draft');

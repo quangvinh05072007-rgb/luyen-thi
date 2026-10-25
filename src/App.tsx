@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { get, post, setUnauthorizedHandler } from './api';
-import { AppCtx, Icon, Loading, Meta, User, useRoute, go, ErrorBox } from './ui/kit';
+import { AppCtx, Icon, Loading, Meta, User, useRoute, go, ErrorBox, Modal } from './ui/kit';
 import { Login } from './pages/Login';
 import { Setup } from './pages/Setup';
 import { Account } from './pages/Account';
@@ -18,6 +18,10 @@ import { PracticeHub } from './pages/student/Practice';
 import { Progress } from './pages/student/Progress';
 import { AdminHome, Users, Audit } from './pages/admin/Admin';
 import { Appeals } from './pages/teacher/Appeals';
+import { PeriodicReports } from './pages/teacher/PeriodicReports';
+import { Family } from './pages/Family';
+import { MyAppeals } from './pages/student/MyAppeals';
+import { InstallApp } from './ui/InstallApp';
 
 type Nav = { path: string; label: string; icon: string };
 const NAV: Record<User['role'], Nav[]> = {
@@ -28,6 +32,7 @@ const NAV: Record<User['role'], Nav[]> = {
     { path: '/de-thi', label: 'Đề thi', icon: 'exam' },
     { path: '/bai-giao', label: 'Kết quả', icon: 'report' },
     { path: '/khieu-nai', label: 'Khiếu nại', icon: 'log' },
+    { path: '/bao-cao', label: 'Báo cáo định kỳ', icon: 'report' },
   ],
   admin: [
     { path: '/', label: 'Toàn trường', icon: 'school' },
@@ -35,11 +40,13 @@ const NAV: Record<User['role'], Nav[]> = {
     { path: '/ngan-hang', label: 'Ngân hàng', icon: 'bank' },
     { path: '/de-thi', label: 'Đề thi', icon: 'exam' },
     { path: '/nhat-ky', label: 'Nhật ký', icon: 'log' },
+    { path: '/bao-cao', label: 'Báo cáo định kỳ', icon: 'report' },
   ],
   student: [
     { path: '/', label: 'Hôm nay', icon: 'home' },
     { path: '/luyen-tap', label: 'Luyện tập', icon: 'practice' },
     { path: '/tien-bo', label: 'Tiến bộ', icon: 'report' },
+    { path: '/khieu-nai', label: 'Khiếu nại', icon: 'log' },
     { path: '/tai-khoan', label: 'Tài khoản', icon: 'user' },
   ],
 };
@@ -57,6 +64,8 @@ export function App() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
   const { path } = useRoute();
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => setNavOpen(false), [path]);
 
   const refreshUser = useCallback(() => {
     get('/api/me')
@@ -74,10 +83,11 @@ export function App() {
     setTimeout(() => setToast((t) => (t === s ? null : t)), 3500);
   }, []);
 
+  if (path === '/phu-huynh') return <><Family /><InstallApp /></>;
   if (bootError) return <div className="main"><ErrorBox error={bootError} onRetry={() => location.reload()} /></div>;
   if (!meta || user === undefined || needsSetup === null) return <Loading text="Đang mở SmartExam…" />;
   if (!user && needsSetup) return <Setup onDone={(u) => { setNeedsSetup(false); setUser(u); go('/'); }} />;
-  if (!user) return <Login onLogin={(u) => { setUser(u); go('/'); }} />;
+  if (!user) return <><Login onLogin={(u) => { setUser(u); go('/'); }} /><InstallApp /></>;
 
   const logout = async () => {
     await post('/api/logout').catch(() => {});
@@ -93,6 +103,7 @@ export function App() {
           ['/ket-qua/:id', ([id]) => <ResultPage key={id} attemptId={Number(id)} />],
           ['/luyen-tap', () => <PracticeHub />],
           ['/tien-bo', () => <Progress />],
+          ['/khieu-nai', () => <MyAppeals />],
           ['/tai-khoan', () => <Account onLogout={logout} />],
         ]
       : [
@@ -104,6 +115,7 @@ export function App() {
           ['/de-thi/:id', ([id]) => <ExamDetail key={id} id={Number(id)} />],
           ['/bai-giao', () => <Assignments />],
           ['/khieu-nai', () => <Appeals />],
+          ['/bao-cao', () => <PeriodicReports />],
           ['/bai-giao/:id', ([id]) => <Report key={id} id={Number(id)} />],
           ['/lop/:id', ([id]) => <ClassView key={id} id={Number(id)} />],
           ['/hoc-sinh/:id', ([id]) => <StudentProfilePage key={id} id={Number(id)} />],
@@ -122,18 +134,21 @@ export function App() {
   }
   const nav = NAV[user.role];
   const inExam = path.startsWith('/thi/');
+  const mobileNav = nav.length > 5 ? nav.slice(0, 4) : nav;
+  const moreNav = nav.length > 5 ? [...nav.slice(4), {path:'/tai-khoan',label:'Tài khoản',icon:'user'}] : [];
   const isActive = (p: string) => (p === '/' ? path === '/' : path.startsWith(p));
 
   return (
     <AppCtx.Provider value={{ meta, user, refreshUser, toast }}>
       <div className="app">
+        <a href="#main-content" className="skip-link" onClick={e => {e.preventDefault();document.getElementById('main-content')?.focus();}}>Đến nội dung chính</a>
         {!inExam && (
           <aside className="sidebar">
             <a className="brand" href="#/">
               <span className="brand-logo">π</span> SmartExam AI
             </a>
             {nav.map((n) => (
-              <a key={n.path} href={`#${n.path}`} className={`nav ${isActive(n.path) ? 'active' : ''}`}>
+              <a key={n.path} href={`#${n.path}`} aria-current={isActive(n.path) ? 'page' : undefined} className={`nav ${isActive(n.path) ? 'active' : ''}`}>
                 <Icon name={n.icon} /> {n.label}
               </a>
             ))}
@@ -152,13 +167,15 @@ export function App() {
             </div>
           </aside>
         )}
-        <main className="main">
+        <main className="main" id="main-content" tabIndex={-1}>
           {!inExam && (
             <div className="topbar">
               <a className="brand" href="#/">
                 <span className="brand-logo">π</span> SmartExam
               </a>
               <div className="grow" />
+              <span className="workspace-label small muted">{{admin:'Quản lý trường',teacher:'Không gian giáo viên',student:'Không gian học tập'}[user.role]}</span>
+              <span className="badge blue">{user.displayName}</span>
             </div>
           )}
           {user.school.sample ? <div className="sample-banner">Bạn đang dùng <b>trường mẫu</b>: tài khoản, câu hỏi và các bài thi cũ ghi "(mô phỏng)" là dữ liệu mẫu để chạy thử.</div> : null}
@@ -171,14 +188,17 @@ export function App() {
         </main>
         {!inExam && (
           <nav className="tabbar">
-            {nav.map((n) => (
-              <a key={n.path} href={`#${n.path}`} className={isActive(n.path) ? 'active' : ''}>
+            {mobileNav.map((n) => (
+              <a key={n.path} href={`#${n.path}`} aria-current={isActive(n.path) ? 'page' : undefined} className={isActive(n.path) ? 'active' : ''}>
                 <Icon name={n.icon} />
                 {n.label}
               </a>
             ))}
+            {moreNav.length > 0 && <button className={moreNav.some(n => isActive(n.path)) ? 'active' : ''} aria-expanded={navOpen} onClick={() => setNavOpen(true)}><Icon name="user" />Thêm</button>}
           </nav>
         )}
+        {navOpen && <Modal title="Các mục khác" onClose={() => setNavOpen(false)}><nav className="stack">{moreNav.map(n => <a className="btn" key={n.path} href={`#${n.path}`} onClick={() => setNavOpen(false)}><Icon name={n.icon} />{n.label}</a>)}</nav></Modal>}
+        {!inExam && <InstallApp />}
         {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
       </div>
     </AppCtx.Provider>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { download, get, post } from '../../api';
 import { MathText } from '../../ui/MathText';
+import { AssignmentExtension, AttemptActions } from '../../ui/StaffActions';
 import { Bar, ErrorBox, ErrorTypeBadge, fmtDateTime, fmtScore, Loading, pct, scoreColor, topicName, useApp, useAsync } from '../../ui/kit';
 
 export function Assignments() {
@@ -85,6 +86,7 @@ export function Report({ id }: { id: number }) {
           Lớp {data.assignment.className} · {data.assignment.mode === 'exam' ? `thi ${data.assignment.durationMin} phút` : 'bài tập'} · đóng {fmtDateTime(data.assignment.closeAt)}
         </div>
         <div className="row mt">
+          <AssignmentExtension id={id} onDone={reload} />
           <button className="btn sm" onClick={() => download(`/api/assignments/${id}/export.xlsx`, `diem-bai-giao-${id}.xlsx`).catch((e) => toast(e.message))}>
             Xuất bảng điểm Excel
           </button>
@@ -156,6 +158,7 @@ export function Report({ id }: { id: number }) {
                 <th>I / II / III</th>
                 <th>Lỗi chính</th>
                 <th>Tín hiệu</th>
+                <th>Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -190,6 +193,7 @@ export function Report({ id }: { id: number }) {
                       )}
                       {r.late?.accepted && <span className="badge">Đã nhận bản muộn</span>}
                     </td>
+                    <td>{r.attemptId && <AttemptActions attemptId={r.attemptId} status={r.status} onDone={reload} />}</td>
                   </tr>
                 );
               })}

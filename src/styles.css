@@ -4,14 +4,14 @@
   --surface-2: #f8f9fd;
   --ink: #18203a;
   --ink-2: #4a5373;
-  --ink-3: #7c84a3;
+  --ink-3: #626d88;
   --line: #e3e7f2;
   --primary: #3049d8;
   --primary-2: #2238b8;
   --primary-soft: #eaeefe;
   --accent: #f5a524;
   --accent-soft: #fff4dd;
-  --good: #149e6a;
+  --good: #08784e;
   --good-soft: #e3f7ee;
   --bad: #d93a4a;
   --bad-soft: #fde9eb;
@@ -19,7 +19,7 @@
   --warn-soft: #fff6e0;
   --violet: #7c4ddb;
   --violet-soft: #f1ebfd;
-  --radius: 16px;
+  --radius: 14px;
   --radius-sm: 10px;
   --shadow: 0 1px 2px rgba(24, 32, 58, 0.06), 0 4px 16px rgba(24, 32, 58, 0.06);
   --shadow-lg: 0 12px 40px rgba(24, 32, 58, 0.16);
@@ -30,11 +30,11 @@
 }
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; min-height: 100%; }
-body { background: var(--bg); font-size: 15px; line-height: 1.55; }
+body { background: var(--bg); font-size: 16px; line-height: 1.6; }
 a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 h1, h2, h3 { margin: 0 0 8px; line-height: 1.25; letter-spacing: -0.01em; }
-h1 { font-size: 24px; font-weight: 800; }
+h1 { font-size: clamp(25px, 2.4vw, 32px); font-weight: 800; letter-spacing: -.035em; }
 h2 { font-size: 18px; font-weight: 700; }
 h3 { font-size: 15px; font-weight: 700; }
 p { margin: 0 0 8px; }
@@ -232,6 +232,67 @@ table.t tr.click:hover td { background: var(--surface-2); }
 /* ---------- phiếu tài khoản (in) ---------- */
 .slips { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 .slip { border: 1px dashed var(--ink-3); border-radius: 8px; padding: 10px 12px; break-inside: avoid; }
+.preserve-lines { white-space: pre-wrap; overflow-wrap: anywhere; }
+.grow { flex: 1; min-width: 0; }
+.comment { border-left: 3px solid var(--primary-soft); padding: 8px 14px; background: var(--surface-2); border-radius: 0 8px 8px 0; }
+.comment p { margin: 8px 0 0; }
+.version-item { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+summary { cursor: pointer; min-height: 32px; }
+.template-panel { border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+.skip-link { position: fixed; left: 12px; top: -100px; z-index: 1000; padding: 10px 16px; background: var(--surface); border: 2px solid var(--primary); border-radius: 8px; }
+.skip-link:focus { top: 12px; }
+.topbar { min-height: 38px; }
+.workspace-label { display: none; }
+.sidebar .brand { letter-spacing: -.02em; }
+.sidebar .who { overflow-wrap: anywhere; }
+.sidebar .nav { min-height: 44px; }
+.sidebar { overflow-y: auto; flex-shrink: 0; }
+.main:focus { outline: none; }
+.card { box-shadow: 0 2px 8px rgba(24,32,58,.035); }
+.card h2 { letter-spacing: -.02em; }
+.stat .v { font-variant-numeric: tabular-nums; letter-spacing: -.045em; }
+.btn { min-height: 44px; transition: background-color 140ms, border-color 140ms; }
+.btn.sm { min-height: 36px; }
+input:not([type=checkbox]):not([type=radio]), select, textarea { max-width: 100%; }
+.field > input, .field > select, .field > textarea, #family-code { border: 1px solid var(--line); background: var(--surface); border-radius: 9px; padding: 10px 12px; min-height: 44px; }
+.field > select { width: 100%; }
+.notice { background: var(--primary-soft); padding: 12px 16px; border-radius: 10px; overflow-wrap: anywhere; }
+.notice.red { background: var(--bad-soft); color: var(--bad); }
+.tabbar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; color: var(--ink-3); padding: 4px 8px; border: none; background: none; border-radius: 10px; min-width: 56px; cursor: pointer; }
+.tabbar button.active { color: var(--primary); background: var(--primary-soft); }
+.tabbar > * { flex: 1; min-height: 48px; }
+.tabbar svg { width: 22px; height: 22px; }
+.pwa-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; font-size: 12px; color: var(--ink-2); background: var(--surface); border-top: 1px solid var(--line); padding: 10px 24px; }
+.pwa-status.is-online { color: var(--good); }
+.pwa-status.is-offline { color: var(--warn); }
+.pwa-help { position: relative; margin-left: auto; }
+.pwa-help summary { min-height: 30px; display: flex; align-items: center; text-decoration: underline; text-underline-offset: 3px; }
+.pwa-help-content { position: absolute; bottom: 40px; right: 0; width: min(340px, 82vw); padding: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-lg); border-radius: 12px; z-index: 35; }
+.pwa-notice { flex-basis: 100%; }
+.app { flex-wrap: wrap; }
+.app > .pwa-controls { flex-basis: 100%; margin-left: 236px; }
+.login-wrap + .pwa-controls { padding-bottom: 20px; }
+.login-wrap { background: var(--bg); }
+.login-card > .center { margin-bottom: 24px; }
+.login-card .card { padding: 24px; }
+.family-portal table { border-collapse: collapse; text-align: left; }
+.family-portal th, .family-portal td { padding: 12px 10px; border-bottom: 1px solid var(--line); }
+.family-portal progress { accent-color: var(--primary); height: 10px; }
+@media (min-width: 900px) { .workspace-label { display: inline; } .topbar { padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 24px; } .sidebar { height: 100dvh; } .main { flex-basis: calc(100% - 236px); } }
+@media (max-width: 899px) {
+  .app > .pwa-controls { margin-left: 0; width: 100%; padding: 12px 16px calc(90px + env(safe-area-inset-bottom)); }
+  .app > .main { padding-bottom: 24px; }
+  .topbar .badge { max-width: 42vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn.sm { min-height: 44px; }
+  .seg { flex-wrap: wrap; }
+  .seg > button { flex: 1 1 auto; min-height: 44px; }
+  .card { padding: 16px; }
+  .modal { max-height: calc(100dvh - 32px); }
+  .pwa-help { margin-left: 0; }
+  .pwa-help-content { left: 0; right: auto; }
+}
+@media (max-width: 420px) { .tabbar a, .tabbar button { min-width: 0; padding: 4px; font-size: 10px; } .row > .btn { white-space: normal; } .list-item { flex-wrap: wrap; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
 @media print {
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }

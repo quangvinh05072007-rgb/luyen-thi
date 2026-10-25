@@ -3,6 +3,8 @@ import { download, get, post, put } from '../../api';
 import { MathText } from '../../ui/MathText';
 import { ErrorBox, LevelBadge, Loading, Modal, SourceBadge, topicName, TypeBadge, useApp, useAsync } from '../../ui/kit';
 import { Draft, QuestionEditor } from '../../ui/QuestionEditor';
+import { Comments } from '../../ui/Comments';
+import { QuestionHistory } from '../../ui/QuestionHistory';
 
 export function QuestionCard({ q, selected, onSelect, onEdit, actions, onDraft }: { q: any; selected?: boolean; onSelect?: () => void; onEdit?: () => void; actions?: React.ReactNode; onDraft?: (action: 'approve' | 'reject', confirmMismatch?: boolean) => void }) {
   const { meta } = useApp();
@@ -15,6 +17,7 @@ export function QuestionCard({ q, selected, onSelect, onEdit, actions, onDraft }
         <TypeBadge type={q.type} />
         <LevelBadge level={q.level} />
         <span className={`badge ${q.status === 'approved' ? 'green' : 'amber'}`}>{q.status === 'approved' ? 'Đã duyệt' : 'Nháp'}</span>
+        {q.status === 'draft' && q.approvals?.length > 0 && <span className="badge blue">{q.approvals.length}/2 người đã duyệt</span>}
         {q.sample ? <span className="badge">Mẫu</span> : null}
         <span className="tiny muted" style={{ flex: 1 }}>
           {topicName(meta, q.topic)}
@@ -74,19 +77,22 @@ export function QuestionCard({ q, selected, onSelect, onEdit, actions, onDraft }
 }
 
 export function Bank() {
-  const { meta, toast } = useApp();
+  const { meta, toast, user } = useApp();
   const [f, setF] = useState({ status: 'all', type: '', topic: '', source: '', level: '', q: '' });
   const qs = useMemo(() => new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][]).toString(), [f]);
   const { data, error, loading, reload } = useAsync(() => get(`/api/questions?${qs}`), [qs]);
   const [sel, setSel] = useState<number[]>([]);
   const [editing, setEditing] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
+  const [discussion, setDiscussion] = useState<number | null>(null);
+  const [history, setHistory] = useState<number | null>(null);
+  const [editReason, setEditReason] = useState('');
 
   const approve = async (ids: number[]) => {
     setBusy(true);
     try {
       const r = await post('/api/questions/approve', { ids });
-      toast(`Đã duyệt ${r.approved.length} câu${r.rejected.length ? `, ${r.rejected.length} câu còn thiếu thông tin` : ''}.`);
+      toast(`Đã duyệt ${r.approved.length} câu${r.pending?.length ? `, ${r.pending.length} câu chờ người thứ hai` : ''}${r.rejected.length ? `, ${r.rejected.length} câu còn thiếu thông tin` : ''}.`);
       setSel([]);
       reload();
     } catch (e: any) {
@@ -152,7 +158,7 @@ export function Bank() {
   };
   const saveEdit = async () => {
     try {
-      await put(`/api/questions/${editing.id}`, editing);
+      await put(`/api/questions/${editing.id}`, { ...editing, reason: editReason, versionNote: editReason || undefined });
       setEditing(null);
       toast('Đã lưu câu hỏi.');
       reload();
@@ -192,6 +198,7 @@ export function Bank() {
           </a>
         </div>
       </div>
+      {data?.reviewPolicy === 'double' && <div className="alert info small">Trường đang duyệt hai người: câu nháp cần hai người khác nhau xác nhận. Sửa nội dung sẽ bắt đầu lại lượt duyệt.</div>}
       <div className="card flat">
         <div className="row">
           <input className="input" style={{ flex: 2, minWidth: 180 }} placeholder="Tìm trong đề bài…" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
@@ -294,12 +301,14 @@ export function Bank() {
             selected={sel.includes(q.id)}
             onSelect={() => setSel((s) => (s.includes(q.id) ? s.filter((x) => x !== q.id) : [...s, q.id]))}
             onDraft={(action, confirmMismatch) => draftAction(q.id, action, confirmMismatch)}
-            onEdit={() => setEditing({ ...q })}
+            onEdit={() => { setEditing({ ...q }); setEditReason(''); }}
             actions={
               <>
+                <button className="btn ghost sm" onClick={() => setDiscussion(q.id)}>Góp ý</button>
+                <button className="btn ghost sm" onClick={() => setHistory(q.id)}>Lịch sử</button>
                 {q.status === 'draft' && (
-                  <button className="btn good sm" disabled={busy || q.problems?.length > 0} onClick={() => approve([q.id])}>
-                    Duyệt
+                  <button className="btn good sm" disabled={busy || q.problems?.length > 0 || q.approvals?.includes(user.id)} onClick={() => approve([q.id])}>
+                    {q.approvals?.length ? 'Duyệt lượt hai' : 'Duyệt'}
                   </button>
                 )}
                 <button className="btn sm" disabled={busy || !meta.aiEnabled} title={meta.aiEnabled ? 'AI tạo câu cùng dạng (nháp)' : meta.aiHint ?? ''} onClick={() => ai('similar', q.id)}>
@@ -316,6 +325,7 @@ export function Bank() {
       {editing && (
         <Modal title={editing.id ? `Sửa câu #${editing.id}` : 'Thêm câu hỏi'} onClose={() => setEditing(null)}>
           <QuestionEditor q={editing as Draft} onChange={(q) => setEditing({ ...editing, ...q })} />
+          {editing.id && <label className="field mt">Lý do sửa / ghi chú phiên bản<input className="input" value={editReason} maxLength={300} onChange={e => setEditReason(e.target.value)} placeholder="Bắt buộc khi đổi đáp án câu đã dùng" /></label>}
           {editing.status === 'approved' && <p className="tiny muted mt">Câu đã duyệt: thay đổi áp dụng cho đề mới. Đề đã tạo giữ bản cũ.</p>}
           <div className="row between mt">
             <button className="btn" onClick={() => setEditing(null)}>
@@ -327,6 +337,8 @@ export function Bank() {
           </div>
         </Modal>
       )}
+      {discussion !== null && <Modal title={`Góp ý câu #${discussion}`} onClose={() => setDiscussion(null)}><Comments kind="question" id={discussion} /></Modal>}
+      {history !== null && <Modal title={`Lịch sử câu #${history}`} onClose={() => setHistory(null)}><QuestionHistory id={history} onRestored={() => { setHistory(null); reload(); }} /></Modal>}
     </div>
   );
 }

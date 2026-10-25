@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { get, post } from '../../api';
+import { api, get, post } from '../../api';
 import { MathText } from '../../ui/MathText';
-import { go, LevelBadge, Modal, SourceBadge, topicName, useApp } from '../../ui/kit';
+import { ErrorBox, go, LevelBadge, Modal, SourceBadge, topicName, useApp, useAsync } from '../../ui/kit';
 
 const PRESETS = {
   official: { label: 'Đề tốt nghiệp chuẩn', counts: { mcq: 12, tf: 4, short: 6 }, levels: { 1: 40, 2: 30, 3: 30 }, durationMin: 90 },
@@ -19,6 +19,14 @@ export function ExamBuilder() {
   const [gen, setGen] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
   const [swap, setSwap] = useState<{ idx: number; options: any[] } | null>(null);
+  const templates = useAsync(() => get('/api/blueprints'), []);
+  const [templateName, setTemplateName] = useState('');
+  const [templateShared, setTemplateShared] = useState(false);
+  const saveTemplate = async () => {
+    setBusy(true);
+    try { await post('/api/blueprints', {name: templateName, blueprint:bp, shared:templateShared}); toast('Đã lưu mẫu ma trận.'); setTemplateName(''); templates.reload(); }
+    catch(e: any) { toast(e.message); } finally {setBusy(false);}
+  };
 
   const applyPreset = (k: keyof typeof PRESETS) => {
     setPreset(k);
@@ -75,6 +83,13 @@ export function ExamBuilder() {
         <p className="small muted">Chọn cấu trúc, máy lấy câu đã duyệt theo ma trận chuyên đề × mức độ, tránh câu vừa dùng. Bạn xem, đổi từng câu, rồi lưu.</p>
       </div>
       <div className="card stack">
+        <details className="template-panel"><summary className="strong">Mẫu ma trận của trường</summary><div className="stack mt">
+          {templates.error && <ErrorBox error={templates.error} onRetry={templates.reload} />}
+          {templates.data?.blueprints.length === 0 && <p className="small muted">Lưu cấu trúc bên dưới thành mẫu để ra đề nhanh lần sau.</p>}
+          {templates.data?.blueprints.map((t: any) => <div className="row between" key={t.id}><div className="grow"><b className="small">{t.name}</b><div className="tiny muted">{t.owner} · {t.shared ? 'Dùng chung' : 'Riêng tư'}</div></div><button className="btn sm" disabled={busy} onClick={() => {setBp({...t.blueprint, durationMin:t.blueprint.durationMin ?? bp.durationMin,topics:t.blueprint.topics ?? []});setPreset('custom');setGen(null);toast('Đã dùng mẫu ma trận.');}}>Dùng mẫu</button>{t.mine && <button className="btn ghost sm" disabled={busy} onClick={async () => {if(!confirm(`Xóa mẫu “${t.name}”?`))return;setBusy(true);try {await api('DELETE',`/api/blueprints/${t.id}`);templates.reload();}catch(e:any){toast(e.message);}finally{setBusy(false);}}}>Xóa</button>}</div>)}
+          <label className="field">Tên mẫu mới<input className="input" value={templateName} maxLength={100} onChange={e => setTemplateName(e.target.value)} placeholder="Ví dụ: Giữa kỳ 12 — 45 phút" /></label>
+          <label className="check"><input type="checkbox" checked={templateShared} onChange={e => setTemplateShared(e.target.checked)} />Cho giáo viên trong trường dùng mẫu</label><div><button className="btn" disabled={busy || !templateName.trim()} onClick={saveTemplate}>Lưu cấu trúc hiện tại thành mẫu</button></div>
+        </div></details>
         <div className="seg">
           {(Object.keys(PRESETS) as (keyof typeof PRESETS)[]).map((k) => (
             <button key={k} className={preset === k ? 'on' : ''} onClick={() => applyPreset(k)}>

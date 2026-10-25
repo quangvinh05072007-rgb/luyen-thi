@@ -20,6 +20,8 @@ import { TOPICS, TOPIC_BY_CODE, LEVELS, SOURCES, SOURCE_HINT, ERROR_TYPES, QUEST
 import { CSV_TEMPLATE, SHEET_HEADERS } from '../shared/sheet.mjs';
 import { seedSample } from './seed.mjs';
 import { SAMPLE_QUESTIONS } from './seedQuestions.mjs';
+import { registerReports } from './reports.mjs';
+import { registerFamily } from './family.mjs';
 
 export const SAVE_GRACE_MS = 30 * 1000; // ân hạn mạng sau giờ nộp
 export const LATE_WINDOW_MS = 15 * 60 * 1000; // nhận bản đồng bộ muộn (mất mạng) để giáo viên quyết định
@@ -124,6 +126,10 @@ export function createApp(config = {}) {
       now(),
       id,
     );
+    const row = db.get('SELECT school_id FROM questions WHERE id = ?', id);
+    if (reviewPolicy(row.school_id) === 'double') {
+      db.run("UPDATE questions SET status = CASE WHEN status = 'archived' THEN status ELSE 'draft' END, approvals_json = NULL, approved_by = NULL WHERE id = ?", id);
+    }
   }
 
   const reviewPolicy = (schoolId) => db.get('SELECT review_policy p FROM schools WHERE id = ?', schoolId)?.p ?? 'single';
@@ -318,7 +324,7 @@ export function createApp(config = {}) {
     const orig = originalResponses(att, responses);
     const grade = gradeAttempt(qs, orig);
     const diag = diagnoseAttempt(qs, orig, times);
-    const t = opts.rescore ? att.submitted_at ?? now() : now();
+    const t = opts.rescore ? att.submitted_at ?? now() : status === 'auto_submitted' ? Math.min(att.deadline_at ?? now(), now()) : now();
     db.run(
       `UPDATE attempts SET status = ?, submitted_at = ?, responses_json = ?, times_json = ?, score10 = ?, points = ?, max_points = ?, result_json = ?, diagnosis_json = ? WHERE id = ?`,
       status,
@@ -427,6 +433,8 @@ export function createApp(config = {}) {
     const re = new RegExp('^' + pattern.replace(/:(\w+)/g, (_, k) => (keys.push(k), '([^/]+)')) + '$');
     routes.push({ method, pattern, re, keys, roles, handler });
   };
+  const reports = registerReports({ route, db, now, fail, audit, teacherClassIds, sweepExpired, saveGraceMs: SAVE_GRACE_MS });
+  registerFamily({ route, db, now, fail, audit, teacherClassIds, sweepExpired });
 
   // ---- phiên ----
   route('POST', '/api/login', null, async ({ body, ip, setCookie }) => {
@@ -494,6 +502,7 @@ export function createApp(config = {}) {
     return {
       questions: rows.map((q) => ({ ...q, stats: um[q.id] ? { n: um[q.id].n, p: Math.round(um[q.id].p * 100) / 100 } : null, problems: validateQuestion(q) })),
       counts: Object.fromEntries(counts.map((c) => [c.status, c.n])),
+      reviewPolicy: reviewPolicy(user.school_id),
     };
   });
 
@@ -546,7 +555,7 @@ export function createApp(config = {}) {
       const errs = validateQuestion(merged);
       if (errs.length) fail(400, `Câu đã duyệt phải hợp lệ: ${errs.join(' ')}`);
     }
-    const contentChanged = ['type', 'stem'].some((k) => merged[k] !== q[k]) || JSON.stringify(merged.options ?? []) !== JSON.stringify(q.options ?? []) || answerChanged;
+    const contentChanged = VERSION_FIELDS.filter((k) => k !== 'status').some((k) => JSON.stringify(merged[k] ?? null) !== JSON.stringify(toQuestion(q)[k] ?? null));
     recordVersion(q, user, reason ?? body.versionNote ?? 'Sửa câu hỏi');
     db.run(
       'UPDATE questions SET type = ?, stem = ?, options_json = ?, answer_json = ?, explanation = ?, topic = ?, level = ?, distractors_json = ?, group_id = ?, tag_confidence = 1, updated_at = ? WHERE id = ?',
@@ -728,6 +737,7 @@ export function createApp(config = {}) {
     if (!text) fail(400, 'Lời giải trống.');
     recordVersion(row, user, 'Duyệt lời giải do AI viết');
     db.run('UPDATE questions SET explanation = ?, explanation_draft = NULL, draft_check_json = NULL, updated_at = ? WHERE id = ?', text, now(), row.id);
+    if (reviewPolicy(user.school_id) === 'double') db.run("UPDATE questions SET status = 'draft', approvals_json = NULL, approved_by = NULL WHERE id = ?", row.id);
     audit(user, 'explanation_approve', `#${row.id}${body.text !== undefined ? ' (đã sửa tay)' : ''}`, ip, { target, old: { explanation: row.explanation }, new: { explanation: text }, reason: row.draft_check?.matches === false ? 'Giáo viên xác nhận dù AI ra đáp án khác' : undefined });
     return { ok: true };
   });
@@ -1004,7 +1014,12 @@ export function createApp(config = {}) {
 
   route('GET', '/api/exams/:id', STAFF, ({ user, params }) => {
     const e = visibleExam(user, params.id);
-    return { exam: { id: e.id, title: e.title, durationMin: e.duration_min, items: e.items, variants: e.variants.map((v) => v.code), blueprint: e.blueprint }, questions: e.snapshot };
+    const rating = db.get('SELECT AVG(stars) avg, COUNT(*) n FROM exam_ratings WHERE exam_id = ?', e.id);
+    return { exam: { id: e.id, title: e.title, durationMin: e.duration_min, items: e.items, variants: e.variants.map((v) => v.code), blueprint: e.blueprint,
+      mine: e.created_by === user.id, visibility: e.visibility, dept: e.dept, author: db.get('SELECT display_name FROM users WHERE id = ?', e.created_by)?.display_name,
+      ratingAvg: rating.avg === null ? null : Math.round(rating.avg * 10) / 10, ratingCount: rating.n,
+      myRating: db.get('SELECT stars FROM exam_ratings WHERE exam_id = ? AND user_id = ?', e.id, user.id)?.stars ?? null,
+    }, questions: e.snapshot };
   });
   route('GET', '/api/exams/:id/answer-key', STAFF, ({ user, params }) => {
     const e = visibleExam(user, params.id);
@@ -2025,7 +2040,7 @@ export function createApp(config = {}) {
     return Buffer.concat(chunks);
   }
 
-  const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.json': 'application/json', '.ico': 'image/x-icon' };
+  const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon' };
 
   function serveStatic(req, res, pathname) {
     if (!distDir) return false;
@@ -2033,7 +2048,8 @@ export function createApp(config = {}) {
     if (!file.startsWith(distDir)) return false;
     if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(distDir, 'index.html');
     if (!fs.existsSync(file)) return false;
-    res.writeHead(200, { 'content-type': MIME[path.extname(file)] ?? 'application/octet-stream', 'cache-control': file.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000, immutable' });
+    const immutable = /[\\/]assets[\\/].+-[\w-]+\.[\w]+$/.test(file);
+    res.writeHead(200, { 'x-content-type-options': 'nosniff', 'content-type': MIME[path.extname(file)] ?? 'application/octet-stream', 'cache-control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache' });
     fs.createReadStream(file).pipe(res);
     return true;
   }
@@ -2081,6 +2097,7 @@ export function createApp(config = {}) {
       const result = await r.handler({
         user,
         token,
+        cookies,
         params,
         query: Object.fromEntries(url.searchParams),
         body,
@@ -2109,6 +2126,7 @@ export function createApp(config = {}) {
     ai,
     now,
     backupNow,
+    materializeDueReports: reports.materializeDueReports,
     internals: {
       finalize,
       getAttempt,
