@@ -2,7 +2,7 @@
 // đồng hồ theo giờ máy chủ, nộp bài thử lại tới khi thành công; hết giờ máy chủ tự chốt bằng bản lưu cuối.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, get, post } from '../../api';
-import { ErrorBox, go, Loading, Modal, useApp, Mascot } from '../../ui/kit';
+import { ErrorBox, go, Loading, Modal, useApp, Mascot, Icon } from '../../ui/kit';
 import { isAnswered, Item, QuestionView, Review } from '../../ui/Question';
 
 type Attempt = {
@@ -301,18 +301,25 @@ export function ExamRoom({ attemptId }: { attemptId: number }) {
     <div>
       <div className="exam-top">
         <button className="btn ghost sm" onClick={() => go('/')} aria-label="Thoát">
-          ←
+          ← Thoát
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="strong" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{att.title}</div>
+          <div className="strong" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 16 }}>{att.title}</div>
           <div className="tiny muted">
-            Đã làm {answered}/{att.items.length}
+            {isPractice ? 'Luyện tập cá nhân' : 'Bài thi trực tuyến'} · Đã làm {answered}/{att.items.length} câu
           </div>
         </div>
         <span className={`save-chip ${saveState === 'offline' ? 'off' : saveState === 'saving' ? 'busy' : ''}`} role="status">
-          {saveState === 'offline' ? 'Mất mạng · đã lưu trên máy' : saveState === 'saving' ? 'Đang lưu…' : savedAt ? `Đã lưu ${new Date(savedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Đã lưu'}
+          {saveState === 'offline' ? 'Mất mạng · đã lưu máy' : saveState === 'saving' ? 'Đang lưu…' : '● Đã lưu'}
         </span>
-        {remaining !== null && !isPractice && <span className={`timer ${remaining < 5 * 60000 ? 'low' : ''}`}>{fmtClock(remaining)}</span>}
+        {remaining !== null && !isPractice && (
+          <span className={`timer ${remaining < 5 * 60000 ? 'low' : ''}`}>
+            <Icon name="clock" /> {fmtClock(remaining)}
+          </span>
+        )}
+        <button className="btn good sm" onClick={() => setConfirm(true)}>
+          {isPractice ? 'Kết thúc' : 'Nộp bài'}
+        </button>
       </div>
 
       <div className="exam-layout">
@@ -337,20 +344,26 @@ export function ExamRoom({ attemptId }: { attemptId: number }) {
                 Câu tiếp →
               </button>
             ) : (
-              <button className="btn primary" onClick={() => setConfirm(true)}>
+              <button className="btn good" onClick={() => setConfirm(true)}>
                 {isPractice ? 'Kết thúc' : 'Nộp bài'}
               </button>
             )}
           </div>
         </div>
         <div className="exam-side card">
-          <h3>Danh sách câu</h3>
+          <div className="row between mb">
+            <h3 style={{ margin: 0 }}>Phiếu trả lời</h3>
+            <span className="badge blue">{answered}/{att.items.length} câu</span>
+          </div>
+          <div className="bar mb">
+            <span style={{ width: `${(answered / att.items.length) * 100}%`, background: 'var(--primary)' }} />
+          </div>
           {(['mcq', 'tf', 'short'] as const).map((type) => {
             const list = att.items.map((x, i) => ({ x, i })).filter(({ x }) => x.type === type);
             if (!list.length) return null;
             return (
               <div key={type} className="mb">
-                <div className="tiny muted mb">{{ mcq: 'Phần I', tf: 'Phần II', short: 'Phần III' }[type]}</div>
+                <div className="tiny muted mb strong">{{ mcq: 'Phần I: Trắc nghiệm', tf: 'Phần II: Đúng / Sai', short: 'Phần III: Trả lời ngắn' }[type]}</div>
                 <div className="palette">
                   {list.map(({ x, i }) => {
                     const c = checks[x.qid];
@@ -365,10 +378,15 @@ export function ExamRoom({ attemptId }: { attemptId: number }) {
               </div>
             );
           })}
-          <button className="btn primary block mt" onClick={() => setConfirm(true)} disabled={submitting}>
+          <div className="row small muted mt" style={{ fontSize: 11, justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+            <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:2, background:'var(--primary)', marginRight:4 }}></span>Đã làm ({answered})</span>
+            <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:2, border:'1px solid #d1d5db', background:'#fff', marginRight:4 }}></span>Chưa làm ({unanswered})</span>
+            {!isPractice && <span>★ Xem lại ({Object.values(flags).filter(Boolean).length})</span>}
+          </div>
+          <button className="btn primary block mt big" onClick={() => setConfirm(true)} disabled={submitting}>
             {isPractice ? 'Kết thúc luyện tập' : 'Nộp bài'}
           </button>
-          {!isPractice && <p className="tiny muted mt">Bài tự lưu sau mỗi lần chọn. Mất mạng vẫn làm tiếp được; có mạng lại sẽ tự gửi. Hết giờ, máy chủ tự nộp bản lưu cuối.</p>}
+          {!isPractice && <p className="tiny muted mt" style={{ fontSize: 11, textAlign: 'center' }}>Hệ thống tự động lưu mỗi câu trả lời.</p>}
         </div>
       </div>
 

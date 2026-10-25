@@ -238,7 +238,35 @@ const P: Record<string, string> = {
   school: 'M3 21h18M5 21V10l7-5 7 5v11M10 21v-5h4v5',
   out: 'M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3',
   flag: 'M5 21V4h11l-2 4 2 4H5',
+  plane: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
+  clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
+  check: 'M20 6L9 17l-5-5',
+  cross: 'M18 6L6 18M6 6l12 12',
+  file: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6',
+  star: 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',
+  edit: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z',
+  trophy: 'M6 9H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M18 9h3a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3M6 3h12v7a6 6 0 0 1-12 0V3zM9 21h6M12 16v5',
+  chart: 'M18 20V10M12 20V4M6 20v-6',
+  plus: 'M12 5v14M5 12h14',
+  upload: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12',
 };
+
+export function AzotaLogo({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <rect width="36" height="36" rx="9" fill="url(#azotaGrad)" />
+      <path d="M8 27L28 9L19 28L15 20L8 27Z" fill="#ffffff" />
+      <path d="M19 28L15 20L28 9L19 28Z" fill="#e6f4ff" opacity="0.9" />
+      <path d="M28 9L15 20L17 12L28 9Z" fill="#ff7a45" opacity="0.95" />
+      <defs>
+        <linearGradient id="azotaGrad" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#1677ff" />
+          <stop offset="1" stopColor="#0958d9" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
 export function Icon({ name }: { name: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

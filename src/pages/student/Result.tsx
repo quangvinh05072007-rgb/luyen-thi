@@ -128,31 +128,57 @@ export function ResultPage({ attemptId }: { attemptId: number }) {
     }
   };
   const good = r.score10 >= 8;
+  const total = data.items.length;
+  const correctCount = r.items.filter((x: any) => x.grade?.correct).length;
+  const wrongCount = r.items.filter((x: any) => !x.grade?.correct && x.grade && x.diagnosis?.kind !== 'blank').length;
+  const blankCount = r.items.filter((x: any) => x.diagnosis?.kind === 'blank').length;
+
   return (
     <div className="stack">
-      <div className="card">
-        <div className="hero">
-          <Mascot size={80} mood={good ? 'cheer' : 'happy'} />
-          <div style={{ flex: 1 }}>
-            <div className="small muted">{data.title}</div>
-            <div style={{ fontSize: 44, fontWeight: 800, color: scoreColor(r.score10), lineHeight: 1.1 }}>
-              {fmtScore(r.score10)}
-              <span style={{ fontSize: 18, color: 'var(--ink-3)' }}> / 10</span>
-            </div>
-            <div className="small muted">
-              {data.kind === 'practice' ? 'Bài luyện tập' : data.status === 'auto_submitted' ? 'Hết giờ — máy chủ đã tự nộp bản lưu cuối' : 'Đã nộp bài'}
-            </div>
+      <div className="azota-result-hero">
+        <div className="small muted" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+          {data.title}
+        </div>
+        <div className="azota-result-score" style={{ color: scoreColor(r.score10) }}>
+          {fmtScore(r.score10)}
+          <span style={{ fontSize: 20, color: 'var(--ink-3)', fontWeight: 500 }}> / 10 điểm</span>
+        </div>
+        <div className="small muted">
+          {data.kind === 'practice' ? 'Bài luyện tập cá nhân' : data.status === 'auto_submitted' ? 'Hết giờ — hệ thống đã tự động nộp bài' : 'Đã nộp bài thành công'}
+        </div>
+        <div className="azota-stat-grid">
+          <div className="azota-stat-card">
+            <span className="azota-stat-val" style={{ color: 'var(--good)' }}>{correctCount}</span>
+            <span className="azota-stat-lbl">Số câu đúng</span>
+          </div>
+          <div className="azota-stat-card">
+            <span className="azota-stat-val" style={{ color: 'var(--bad)' }}>{wrongCount}</span>
+            <span className="azota-stat-lbl">Số câu sai</span>
+          </div>
+          <div className="azota-stat-card">
+            <span className="azota-stat-val" style={{ color: 'var(--ink-3)' }}>{blankCount}</span>
+            <span className="azota-stat-lbl">Chưa trả lời</span>
+          </div>
+          <div className="azota-stat-card">
+            <span className="azota-stat-val" style={{ color: 'var(--primary)' }}>{total}</span>
+            <span className="azota-stat-lbl">Tổng số câu</span>
           </div>
         </div>
-        {r.late && !r.late.accepted && <div className="alert warn mt small">Một phần bài làm lúc mất mạng được gửi sau giờ nộp. Giáo viên sẽ xem xét có tính hay không.</div>}
-        <div className="hr" />
-        <div className="row between">
-          <div className="small">{weak.length ? <>Nên luyện thêm: {weak.length} chuyên đề yếu nhất trong bài này.</> : 'Giữ phong độ bằng bài luyện ngắn hôm nay.'}</div>
-          <button className="btn primary big" onClick={practice} disabled={starting}>
-            {starting ? 'Đang chọn câu…' : 'Luyện lại phần yếu'}
-          </button>
-        </div>
       </div>
+
+      {r.late && !r.late.accepted && (
+        <div className="alert warn small">Một phần bài làm lúc mất mạng được gửi sau giờ nộp. Giáo viên sẽ xem xét có tính hay không.</div>
+      )}
+
+      <div className="card row between">
+        <div className="small">
+          {weak.length ? <>Nên luyện thêm: <b>{weak.length} chuyên đề</b> còn yếu nhất trong bài này.</> : 'Làm tốt lắm! Hãy duy trì phong độ làm bài.'}
+        </div>
+        <button className="btn primary" onClick={practice} disabled={starting}>
+          {starting ? 'Đang chọn câu…' : 'Luyện lại phần yếu'}
+        </button>
+      </div>
+
       <ResultSummary data={data} />
       <AttemptReview
         data={data}

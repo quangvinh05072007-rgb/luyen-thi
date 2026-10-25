@@ -27,9 +27,15 @@ export function Classes() {
         </div>
         {filtered.length === 0 ? <div className="card empty">Không có lớp khớp bộ lọc. Thử đổi tên hoặc khối.</div> : <div className="grid-2">
           {filtered.map(c => <a className="card class-link" href={`#/lop/${c.id}`} key={c.id}>
-            <div className="row between"><h2>Lớp {c.name}</h2><span className="badge blue">Khối {c.grade}</span></div>
-            <p className="small muted">{c.students} học sinh · {c.teacher ?? 'Chưa gán giáo viên'}</p>
-            <div className="row small mt"><Icon name="class" /><span>Xem học sinh và kết quả</span></div>
+            <div className="row between">
+              <h2 style={{ color: '#111827', margin: 0 }}>Lớp {c.name}</h2>
+              <span className="badge blue">Khối {c.grade}</span>
+            </div>
+            <p className="small muted" style={{ margin: '8px 0' }}>{c.students} học sinh · {c.teacher ?? 'Chưa gán giáo viên'}</p>
+            <div className="row between small mt" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+              <span className="row" style={{ gap: 6, color: 'var(--ink-2)' }}><Icon name="class" /> Quản lý học sinh & bài giao</span>
+              <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Vào lớp →</span>
+            </div>
           </a>)}
         </div>}
       </> : <div className="card empty"><h2>Chưa có lớp học</h2><p>{user.role === 'admin' ? 'Vào Quản lý lớp và tài khoản để tạo lớp, thêm học sinh và gán giáo viên.' : 'Nhờ quản lý trường gán lớp phụ trách cho tài khoản của bạn.'}</p></div>}

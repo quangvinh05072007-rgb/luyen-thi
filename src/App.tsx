@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { get, post, setUnauthorizedHandler } from './api';
-import { AppCtx, Icon, Loading, Meta, User, useRoute, go, ErrorBox, Modal } from './ui/kit';
+import { AppCtx, AzotaLogo, Icon, Loading, Meta, User, useRoute, go, ErrorBox, Modal } from './ui/kit';
 import { Login } from './pages/Login';
 import { Setup } from './pages/Setup';
 import { Account } from './pages/Account';
@@ -144,7 +144,11 @@ export function App() {
         {!inExam && (
           <aside className="sidebar">
             <a className="brand" href="#/">
-              <span className="brand-logo">π</span> SmartExam AI
+              <AzotaLogo size={34} />
+              <div className="brand-text">
+                <span className="brand-name">SmartExam</span>
+                <span className="brand-tag">azota style</span>
+              </div>
             </a>
             {nav.map((n) => (
               <a key={n.path} href={`#${n.path}`} aria-current={isActive(n.path) ? 'page' : undefined} className={`nav ${isActive(n.path) ? 'active' : ''}`}>
@@ -162,7 +166,10 @@ export function App() {
           {!inExam && (
             <div className="topbar">
               <a className="brand" href="#/">
-                <span className="brand-logo">π</span> SmartExam
+                <AzotaLogo size={32} />
+                <div className="brand-text">
+                  <span className="brand-name">SmartExam</span>
+                </div>
               </a>
               <div className="grow" />
               <span className="workspace-label small muted">{{admin:'Quản lý trường',teacher:'Không gian giáo viên',student:'Không gian học tập'}[user.role]}</span>
