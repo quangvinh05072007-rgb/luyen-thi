@@ -7,6 +7,16 @@ export function hashPassword(pw) {
   return `scrypt$${salt.toString('base64')}$${hash.toString('base64')}`;
 }
 
+/** Bản không chặn luồng chính: băm mật khẩu chạy trong nhóm luồng của Node (nhiều học sinh đăng nhập cùng lúc không làm treo máy chủ). */
+export function verifyPasswordAsync(pw, stored) {
+  const [alg, salt, hash] = String(stored).split('$');
+  if (alg !== 'scrypt' || !salt || !hash) return Promise.resolve(false);
+  const ref = Buffer.from(hash, 'base64');
+  return new Promise((resolve) => {
+    crypto.scrypt(String(pw), Buffer.from(salt, 'base64'), 32, { N: 16384, r: 8, p: 1 }, (err, h) => resolve(!err && h.length === ref.length && crypto.timingSafeEqual(h, ref)));
+  });
+}
+
 export function verifyPassword(pw, stored) {
   const [alg, salt, hash] = String(stored).split('$');
   if (alg !== 'scrypt' || !salt || !hash) return false;

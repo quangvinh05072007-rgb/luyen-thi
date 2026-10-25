@@ -4,6 +4,18 @@ import { parseExamText } from '../shared/parse.mjs';
 import { readXlsx, parseCsv, rowsToQuestions } from '../shared/sheet.mjs';
 import { classifyQuestion } from '../shared/classify.mjs';
 
+/** Nối các mảnh chữ trên một dòng: chỉ chèn dấu cách khi khoảng hở đủ lớn (PDF từ Word tách từng dấu tiếng Việt thành mảnh riêng). */
+function joinRow(items) {
+  let out = '';
+  let prevEnd = null;
+  for (const it of items) {
+    if (prevEnd !== null && it.x - prevEnd > 0.18 * it.h && !/^\s/.test(it.s) && !/\s$/.test(out)) out += ' ';
+    out += it.s;
+    prevEnd = it.x + it.w;
+  }
+  return out.normalize('NFKC').replace(/\s+/g, ' ').trim();
+}
+
 export async function pdfToText(buf) {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useSystemFonts: true, disableFontFace: true, verbosity: 0 }).promise;
@@ -16,11 +28,11 @@ export async function pdfToText(buf) {
       if (!('str' in it)) continue;
       const y = Math.round(it.transform[5] / 3) * 3;
       if (!rows.has(y)) rows.set(y, []);
-      rows.get(y).push({ x: it.transform[4], s: it.str });
+      rows.get(y).push({ x: it.transform[4], w: it.width ?? 0, h: Math.abs(it.transform[3]) || 10, s: it.str });
     }
     [...rows.entries()]
       .sort((a, b) => b[0] - a[0])
-      .forEach(([, items]) => lines.push(items.sort((a, b) => a.x - b.x).map((i) => i.s).join(' ').replace(/\s+/g, ' ').trim()));
+      .forEach(([, items]) => lines.push(joinRow(items.sort((a, b) => a.x - b.x))));
   }
   return { text: lines.join('\n'), pages: doc.numPages };
 }

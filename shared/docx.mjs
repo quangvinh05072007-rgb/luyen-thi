@@ -81,8 +81,16 @@ function blockText(node, stats, lines) {
 }
 
 /** Đọc .docx → { text, stats: { equations, images, oleEquations } } */
+/** Chặn file nén "bom": tổng dung lượng sau giải nén quá lớn sẽ làm hết bộ nhớ máy chủ. */
+export function assertSafeZip(zip, maxBytes = 150e6) {
+  let total = 0;
+  for (const f of Object.values(zip.files)) total += f._data?.uncompressedSize ?? 0;
+  if (total > maxBytes) throw Object.assign(new Error('File nén quá lớn sau khi giải nén — có thể là file hỏng hoặc không an toàn.'), { status: 400 });
+}
+
 export async function readDocx(data) {
   const zip = await JSZip.loadAsync(data);
+  assertSafeZip(zip);
   const file = zip.file('word/document.xml');
   if (!file) throw new Error('File không phải Word .docx hợp lệ (thiếu word/document.xml).');
   const xml = await file.async('string');

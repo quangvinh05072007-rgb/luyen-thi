@@ -153,3 +153,19 @@ Chưa thử: học sinh truy cập thật từ máy khác qua mạng LAN (phụ 
 1. Học sinh thi theo mã đề in trong Word (đã làm) thay cho bản đảo riêng từng em — xác nhận lại nếu muốn quay về bản riêng.
 2. Giao diện còn thiếu cho các API mới: chọn chế độ chia mã / nhập nhóm câu, thống kê quá hạn cho giáo viên, nút mở lại / sửa điểm / gia hạn / xuất CSV kèm ô lý do.
 3. Mở lại lượt thi có nên hoàn tác XP, chuỗi ngày, lịch ôn đã tính không (hiện không).
+
+## 12. Giai đoạn 0 — nền tảng và kiểm thử thật (25/10/2026)
+
+**Kiểm thử thật đã chạy (`tests/reliability.test.mjs`, 8 test):**
+- **PDF thật**: `tests/fixtures/de-xuat-tu-word.pdf` do Microsoft Word xuất từ đề mẫu. Lần đầu nhập lộ 2 lỗi thật: chữ bị tách từng dấu ("Giá tr ị c ủ a"), và tiêu đề "PHẦN III" dính vào phương án D. Đã sửa (`joinRow` trong `server/importers.mjs`: chỉ chèn dấu cách khi khoảng hở đủ lớn; chuẩn hóa NFKC đổi chữ toán in nghiêng 𝑥 → x). Sau sửa: tách đúng 2 câu, phương án sạch. **Giới hạn còn lại**: phân số xếp chồng trong PDF vẫn mất cấu trúc (ví dụ ½ biến mất), vẫn kèm cảnh báo bắt kiểm tra tay; PDF không mang dấu gạch chân nên không nhận đáp án.
+- **Excel thật**: `tests/fixtures/mau-excel-that.xlsx` do Microsoft Excel 16 lưu (ô số, ô chữ, công thức LaTeX, dấu phẩy). Nhập đúng 5 câu, ô số `1` không thành `1.0`, đáp án `1.5` nhận cả `1,5` và `3/2`.
+- **Word thật** vẫn nhập đúng sau thay đổi giới hạn file nén.
+- **Tải**: 300 học sinh bắt đầu → lưu → nộp (1/3 số em nộp lặp song song): 1000 yêu cầu trong 1,9 giây, p50 196 ms, p95 241 ms, lớn nhất 256 ms (cùng máy với máy chủ, SQLite trong bộ nhớ, đợt 100 kết nối một lúc). Đúng 300 bài, không trùng, không ghi bằng chứng hai lần.
+- **Đăng nhập đồng thời**: trước đây băm mật khẩu (scrypt) chạy ngay trên luồng chính, ~50 ms/lần nên 500 học sinh đăng nhập đầu giờ có thể làm máy chủ đứng hơn 20 giây. Nay chạy bằng `crypto.scrypt` bất đồng bộ (`verifyPasswordAsync`); 100 đăng nhập song song, trang khác vẫn phản hồi ≤ 220 ms. Đăng nhập tên không tồn tại cũng băm một lần để không lộ tên đăng nhập qua thời gian trả lời.
+- **Sao lưu và khôi phục**: thêm `server/restore.mjs` (`npm run restore -- data/backups/<file>.db`; phải tắt máy chủ trước). Kiểm tra `integrity_check` và đủ bảng trước khi thay, giữ bản đang dùng thành `*.truoc-khoi-phuc-<giờ>`. Test: xóa dữ liệu → khôi phục → số tài khoản, bài làm và máy chủ khởi động lại đều đúng; bản hỏng/không tồn tại bị từ chối; giữ tối đa N bản sao lưu.
+- **Bảo mật**: chặn file nén "bom" (>150 MB sau giải nén) cho Word và Excel.
+
+**Chưa kiểm thử / hạn chế thật:**
+- Thử tải chạy trong cùng một tiến trình với máy chủ, chưa thử bằng nhiều máy qua Wi-Fi lớp học. **Phát hiện**: 300 kết nối mở cùng một lúc trên Windows 11 thường bị từ chối (`ECONNREFUSED`) vì hàng đợi kết nối của hệ điều hành nhỏ; khi đó phải rải học sinh vào theo đợt ≤ 100. Chưa thêm tự thử lại kết nối ở phía trình duyệt.
+- Chưa thử Safari/iOS, chưa thử PDF scan (cần AI), chưa có khóa AI nên các chức năng AI vẫn chưa kiểm thử thật.
+- Chưa có giao diện nút khôi phục: khôi phục làm bằng dòng lệnh.

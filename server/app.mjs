@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { openDb, toQuestion } from './db.mjs';
-import { hashPassword, verifyPassword, newToken, tempPassword, LoginLimiter, parseCookies } from './security.mjs';
+import { hashPassword, verifyPassword, verifyPasswordAsync, newToken, tempPassword, LoginLimiter, parseCookies } from './security.mjs';
 import { importFile, importText } from './importers.mjs';
 import { makeAi } from './ai.mjs';
 import { gradeAttempt, gradeQuestion } from '../shared/grading.mjs';
@@ -34,6 +34,7 @@ const fail = (status, message, extra) => {
   throw new HttpError(status, message, extra);
 };
 
+const DUMMY_HASH = hashPassword('khong-co-tai-khoan');
 const dayKey = vnDay; // ngày lịch giờ Việt Nam
 
 /** Kiểm tra câu hỏi đủ điều kiện duyệt. Trả về danh sách lỗi (rỗng = hợp lệ). */
@@ -387,12 +388,14 @@ export function createApp(config = {}) {
   };
 
   // ---- phiên ----
-  route('POST', '/api/login', null, ({ body, ip, setCookie }) => {
+  route('POST', '/api/login', null, async ({ body, ip, setCookie }) => {
     const username = String(body.username ?? '').trim().toLowerCase();
     const key = `${username}|${ip}`;
     if (limiter.blocked(key, now())) fail(429, 'Sai mật khẩu quá nhiều lần. Đợi 10 phút rồi thử lại.');
     const u = db.get('SELECT * FROM users WHERE username = ? AND active = 1', username);
-    if (!u || !verifyPassword(body.password ?? '', u.pass_hash)) {
+    // Luôn băm một lần dù không có tài khoản: không lộ tên đăng nhập nào tồn tại qua thời gian trả lời.
+    const okPw = u ? await verifyPasswordAsync(body.password ?? '', u.pass_hash) : (await verifyPasswordAsync(body.password ?? '', DUMMY_HASH), false);
+    if (!okPw) {
       limiter.fail(key, now());
       fail(401, 'Sai tên đăng nhập hoặc mật khẩu.');
     }

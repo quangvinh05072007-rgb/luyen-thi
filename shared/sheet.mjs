@@ -2,6 +2,7 @@
 // Loại | Nội dung | A | B | C | D | Đáp án | Chủ đề | Mức độ | Lời giải
 // Loại: TN (trắc nghiệm), DS (đúng/sai: A–D là 4 ý, đáp án "ĐSĐS"), TLN (trả lời ngắn).
 import JSZip from 'jszip';
+import { assertSafeZip } from './docx.mjs';
 import { parseXml, child, children, findAll, textOf } from './xml.mjs';
 import { TOPICS } from './topics.mjs';
 
@@ -62,6 +63,7 @@ function colIndex(ref) {
 /** Đọc trang tính đầu tiên của .xlsx → mảng hàng. */
 export async function readXlsx(data) {
   const zip = await JSZip.loadAsync(data);
+  assertSafeZip(zip);
   const shared = [];
   const ss = zip.file('xl/sharedStrings.xml');
   if (ss) {
