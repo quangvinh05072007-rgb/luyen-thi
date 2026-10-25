@@ -96,3 +96,15 @@ Chưa thử: học sinh truy cập thật từ máy khác qua mạng LAN (phụ 
 - Giao diện: chưa có ô chọn chế độ chia mã / nhập nhóm câu (API sẵn sàng). Chưa kiểm thử mở file Word có bảng chéo bằng Microsoft Word thật (chỉ kiểm tra XML).
 - Bài giao cũ không có bảng chia mã: em vào lớp muộn được chia theo băm cố định.
 - Dữ liệu mẫu (`seed.mjs`) vẫn dùng layout riêng từng em, không có `variant_code`.
+
+## 8. Bản 0.3 — Nâng cấp 2: ôn tập giãn cách (25/10/2026)
+
+**Đã làm (có test):**
+- `shared/spaced.mjs` — hàm thuần `scheduleReview(trạng thái, đúng/sai, thời điểm)` → `{state, action}`; ngày tính theo lịch Asia/Ho_Chi_Minh (ranh giới 17:00 UTC). Bậc 1–3–7–14–30 ngày; sai → về bậc đầu (hẹn 1 ngày, tính `lapses`); đúng → lên bậc; đúng ở bậc cuối → ra khỏi sổ.
+- Không ôn hai lần một câu trong một ngày (`skip`). Quy tắc thêm: làm đúng khi chưa đến hạn thì không lên bậc (`early`), tránh lên bậc bằng cách làm lại mỗi ngày; làm sai thì luôn về bậc đầu.
+- Cột `review_items.due_day`, `last_day`; mục cũ được suy ra `due_day` từ `due_at` (test di trú).
+- API: `GET /api/student/review/due` (đến hạn hôm nay, chỉ của chính em, kèm số ngày quá hạn), `GET /api/teacher/review-stats[?classId]` (mỗi lớp mình phụ trách: số em có câu quá hạn, từng em đến hạn/quá hạn/quá hạn lâu nhất; quản lý xem cả trường).
+- Chế độ luyện tập "ôn lại" và số câu đến hạn trong hồ sơ dùng `due_day`.
+- Test mới `tests/spaced.test.mjs` (8 test).
+
+**Chưa làm / lưu ý:** giao diện chưa hiển thị thống kê quá hạn cho giáo viên. `updateReview` cũ trong `shared/diagnose.mjs` không còn được dùng ở máy chủ (giữ lại vì test cũ). Chưa kiểm thử giờ mùa hè (Việt Nam không có).

@@ -7,9 +7,10 @@ import { hashPassword, verifyPassword, newToken, tempPassword, LoginLimiter, par
 import { importFile, importText } from './importers.mjs';
 import { makeAi } from './ai.mjs';
 import { gradeAttempt, gradeQuestion } from '../shared/grading.mjs';
+import { vnDay, scheduleReview, startOfDayMs, isDue, overdueDays } from '../shared/spaced.mjs';
 import { hashSeed } from '../shared/rng.mjs';
 import { generateExam, makeVariant, makeVariants, variantLayout, assignVariants, toOriginalResponse, OFFICIAL_BLUEPRINT } from '../shared/generate.mjs';
-import { diagnoseAttempt, diagnoseItem, computeMastery, recommend, updateReview, selectPractice } from '../shared/diagnose.mjs';
+import { diagnoseAttempt, diagnoseItem, computeMastery, recommend, selectPractice } from '../shared/diagnose.mjs';
 import { examToDocx, crossAnswerKey } from '../shared/exportExam.mjs';
 import { TOPICS, TOPIC_BY_CODE, LEVELS, SOURCES, SOURCE_HINT, ERROR_TYPES, QUESTION_TYPES } from '../shared/topics.mjs';
 import { CSV_TEMPLATE } from '../shared/sheet.mjs';
@@ -32,10 +33,7 @@ const fail = (status, message, extra) => {
   throw new HttpError(status, message, extra);
 };
 
-function dayKey(ms) {
-  const d = new Date(ms + 7 * 3600 * 1000); // giờ Việt Nam
-  return d.toISOString().slice(0, 10);
-}
+const dayKey = vnDay; // ngày lịch giờ Việt Nam
 
 /** Kiểm tra câu hỏi đủ điều kiện duyệt. Trả về danh sách lỗi (rỗng = hợp lệ). */
 export function validateQuestion(q) {
@@ -204,15 +202,20 @@ export function createApp(config = {}) {
       t,
     );
     const cur = db.get('SELECT * FROM review_items WHERE student_id = ? AND qid = ?', att.student_id, q.id);
-    const next = updateReview(cur ? { box: cur.box, due_at: cur.due_at, lapses: cur.lapses } : null, g.correct, t);
-    if (next) {
+    const prev = cur ? { box: cur.box, due_day: cur.due_day ?? vnDay(cur.due_at), last_day: cur.last_day, lapses: cur.lapses } : null;
+    const { state: next, action } = scheduleReview(prev, g.correct, t);
+    if (action === 'skip' || action === 'early' || action === 'none') {
+      // giữ nguyên lịch
+    } else if (next) {
       db.run(
-        'INSERT INTO review_items (student_id, qid, school_id, box, due_at, lapses) VALUES (?,?,?,?,?,?) ON CONFLICT(student_id, qid) DO UPDATE SET box = excluded.box, due_at = excluded.due_at, lapses = excluded.lapses',
+        'INSERT INTO review_items (student_id, qid, school_id, box, due_at, due_day, last_day, lapses) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(student_id, qid) DO UPDATE SET box = excluded.box, due_at = excluded.due_at, due_day = excluded.due_day, last_day = excluded.last_day, lapses = excluded.lapses',
         att.student_id,
         q.id,
         att.school_id,
         next.box,
-        next.due_at,
+        startOfDayMs(next.due_day),
+        next.due_day,
+        next.last_day,
         next.lapses,
       );
     } else if (cur) db.run('DELETE FROM review_items WHERE student_id = ? AND qid = ?', att.student_id, q.id);
@@ -313,7 +316,7 @@ export function createApp(config = {}) {
         studentId,
       )
       .map((a) => ({ ...a, score10: a.status === 'in_progress' ? null : a.score10 }));
-    const due = db.get('SELECT COUNT(*) n FROM review_items WHERE student_id = ? AND due_at <= ?', studentId, now()).n;
+    const due = db.get('SELECT COUNT(*) n FROM review_items WHERE student_id = ? AND due_day <= ?', studentId, dayKey(now())).n;
     const reviewTotal = db.get('SELECT COUNT(*) n FROM review_items WHERE student_id = ?', studentId).n;
     const days = db.all('SELECT day, questions, correct FROM activity WHERE student_id = ? ORDER BY day DESC LIMIT 28', studentId);
     return {
@@ -925,6 +928,36 @@ export function createApp(config = {}) {
     return v;
   });
 
+  // ---- ôn giãn cách (sổ lỗi sai) ----
+  route('GET', '/api/student/review/due', ['student'], ({ user }) => {
+    const t = now();
+    const rows = db.all('SELECT r.qid, r.box, r.due_day, r.lapses, q.topic, q.level FROM review_items r JOIN questions q ON q.id = r.qid WHERE r.student_id = ? AND r.due_day <= ? ORDER BY r.due_day, r.qid', user.id, dayKey(t));
+    const total = db.get('SELECT COUNT(*) n FROM review_items WHERE student_id = ?', user.id).n;
+    return {
+      today: dayKey(t),
+      count: rows.length,
+      total,
+      items: rows.map((r) => ({ qid: r.qid, topic: r.topic, level: r.level, box: r.box + 1, boxes: 5, dueDay: r.due_day, overdueDays: overdueDays({ due_day: r.due_day }, t), lapses: r.lapses })),
+    };
+  });
+  route('GET', '/api/teacher/review-stats', STAFF, ({ user, query }) => {
+    const t = now();
+    const today = dayKey(t);
+    let classIds = teacherClassIds(user);
+    if (query.classId) classIds = classIds.filter((c) => c === Number(query.classId));
+    const classes = classIds.map((cid) => {
+      const c = db.get('SELECT id, name FROM classes WHERE id = ?', cid);
+      const students = db.all("SELECT id, display_name FROM users WHERE class_id = ? AND school_id = ? AND role = 'student' AND active = 1 ORDER BY display_name", cid, user.school_id).map((s) => {
+        const rows = db.all('SELECT due_day FROM review_items WHERE student_id = ?', s.id);
+        const due = rows.filter((r) => isDue(r, t));
+        const overdue = rows.filter((r) => r.due_day < today);
+        return { id: s.id, name: s.display_name, total: rows.length, due: due.length, overdue: overdue.length, maxOverdueDays: Math.max(0, ...rows.map((r) => overdueDays(r, t))) };
+      });
+      return { id: c.id, name: c.name, students, studentsWithOverdue: students.filter((s) => s.overdue > 0).length, totalOverdue: students.reduce((n, s) => n + s.overdue, 0), totalDue: students.reduce((n, s) => n + s.due, 0) };
+    });
+    return { today, classes };
+  });
+
   // ---- luyện tập thích ứng ----
   route('POST', '/api/practice/start', ['student'], ({ user, body, ip }) => {
     const mode = body.mode ?? 'weak';
@@ -933,7 +966,7 @@ export function createApp(config = {}) {
     const mastery = studentMastery(user.id);
     const hist = {};
     for (const e of db.all('SELECT qid, correct, at FROM evidence WHERE student_id = ? ORDER BY at', user.id)) hist[e.qid] = { lastCorrect: !!e.correct, lastAt: e.at };
-    const dueRows = db.all('SELECT qid FROM review_items WHERE student_id = ? AND due_at <= ?', user.id, now());
+    const dueRows = db.all('SELECT qid FROM review_items WHERE student_id = ? AND due_day <= ?', user.id, dayKey(now()));
     const due = new Set(dueRows.map((r) => r.qid));
     let topics;
     let title;
