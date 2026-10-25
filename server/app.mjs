@@ -63,9 +63,55 @@ export function createApp(config = {}) {
   const distDir = config.distDir;
 
   // ---------------- tiện ích ----------------
-  function audit(user, action, detail, ip) {
-    db.run('INSERT INTO audit_log (school_id, user_id, action, detail, ip, at) VALUES (?,?,?,?,?,?)', user?.school_id ?? null, user?.id ?? null, action, detail ? String(detail).slice(0, 500) : null, ip ?? null, now());
+  /** Ghi nhật ký (chỉ thêm). extra: { target, old, new, reason, outcome: 'ok' | 'denied' }. */
+  function audit(user, action, detail, ip, extra = {}) {
+    const js = (v) => (v === undefined ? null : JSON.stringify(v));
+    db.run(
+      'INSERT INTO audit_log (school_id, user_id, action, detail, ip, at, target, old_json, new_json, reason, outcome) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      user?.school_id ?? null,
+      user?.id ?? null,
+      action,
+      detail ? String(detail).slice(0, 500) : null,
+      ip ?? null,
+      now(),
+      extra.target ?? null,
+      js(extra.old),
+      js(extra.new),
+      extra.reason ? String(extra.reason).slice(0, 500) : null,
+      extra.outcome ?? 'ok',
+    );
   }
+
+  /** Từ chối thao tác nhạy cảm: ghi nhận lần thử rồi trả 403. */
+  function deny(user, action, target, why, ip) {
+    audit(user, action, why, ip, { target, outcome: 'denied' });
+    fail(403, `Bạn không có quyền làm việc này. ${why}`);
+  }
+
+  /** Lý do bắt buộc cho thao tác nhạy cảm. */
+  function needReason(body) {
+    const r = String(body?.reason ?? '').trim();
+    if (r.length < 5) fail(400, 'Phải nhập lý do (ít nhất 5 ký tự).');
+    return r;
+  }
+
+  function questionUsed(schoolId, qid) {
+    if (db.get('SELECT 1 x FROM evidence WHERE school_id = ? AND qid = ? LIMIT 1', schoolId, qid)) return true;
+    return db.all('SELECT items_json FROM exams WHERE school_id = ?', schoolId).some((e) => e.items.some((x) => x.qid === qid));
+  }
+
+  /** Bài làm thuộc lớp mình phụ trách (admin: cả trường). Sai quyền → ghi nhận và 403. */
+  function staffAttempt(user, id, action, ip) {
+    const att = db.get('SELECT * FROM attempts WHERE id = ?', id);
+    if (!att) fail(404, 'Không tìm thấy bài làm.');
+    const target = `attempt:${att.id}`;
+    if (att.school_id !== user.school_id) deny(user, action, target, 'Bài làm không thuộc trường của bạn.', ip);
+    const asg = att.assignment_id ? db.get('SELECT * FROM assignments WHERE id = ?', att.assignment_id) : null;
+    if (!asg) fail(400, 'Chỉ bài được giao mới thao tác được.');
+    if (!teacherClassIds(user).includes(asg.class_id)) deny(user, action, target, 'Bạn không phụ trách lớp này.', ip);
+    return { att, asg };
+  }
+
 
   function publicUser(u) {
     if (!u) return null;
@@ -336,7 +382,7 @@ export function createApp(config = {}) {
   const route = (method, pattern, roles, handler) => {
     const keys = [];
     const re = new RegExp('^' + pattern.replace(/:(\w+)/g, (_, k) => (keys.push(k), '([^/]+)')) + '$');
-    routes.push({ method, re, keys, roles, handler });
+    routes.push({ method, pattern, re, keys, roles, handler });
   };
 
   // ---- phiên ----
@@ -444,6 +490,13 @@ export function createApp(config = {}) {
     const q = db.get('SELECT * FROM questions WHERE id = ? AND school_id = ?', params.id, user.school_id);
     if (!q) fail(404, 'Không tìm thấy câu hỏi.');
     const merged = { ...toQuestion(q), ...body };
+    const answerChanged = JSON.stringify(merged.answer ?? null) !== JSON.stringify(toQuestion(q).answer ?? null);
+    const sensitive = answerChanged && questionUsed(user.school_id, q.id);
+    let reason = null;
+    if (sensitive) {
+      if (user.role !== 'admin' && q.created_by !== user.id) deny(user, 'question_answer_change', `question:${q.id}`, 'Chỉ người tạo câu hoặc quản lý mới đổi đáp án câu đã dùng.', ip);
+      reason = needReason(body);
+    }
     if (merged.status === 'approved') {
       const errs = validateQuestion(merged);
       if (errs.length) fail(400, `Câu đã duyệt phải hợp lệ: ${errs.join(' ')}`);
@@ -462,7 +515,8 @@ export function createApp(config = {}) {
       now(),
       q.id,
     );
-    audit(user, 'question_edit', `#${q.id}`, ip);
+    if (sensitive) audit(user, 'question_answer_change', `#${q.id}`, ip, { target: `question:${q.id}`, old: { answer: toQuestion(q).answer }, new: { answer: merged.answer }, reason });
+    else audit(user, 'question_edit', `#${q.id}`, ip, { target: `question:${q.id}` });
     return { question: toQuestion(db.get('SELECT * FROM questions WHERE id = ?', q.id)) };
   });
   route('POST', '/api/questions/approve', STAFF, ({ user, body, ip }) => {
@@ -486,8 +540,11 @@ export function createApp(config = {}) {
   });
   route('POST', '/api/questions/archive', STAFF, ({ user, body, ip }) => {
     const ids = (Array.isArray(body.ids) ? body.ids : []).map(Number);
-    for (const id of ids) db.run("UPDATE questions SET status = 'archived', updated_at = ? WHERE id = ? AND school_id = ?", now(), id, user.school_id);
-    audit(user, 'question_archive', ids.map((x) => `#${x}`).join(' '), ip);
+    const rows = ids.map((id) => db.get('SELECT id, status, created_by FROM questions WHERE id = ? AND school_id = ?', id, user.school_id)).filter(Boolean);
+    const foreign = rows.filter((q) => user.role !== 'admin' && q.created_by !== user.id);
+    if (foreign.length) deny(user, 'question_archive', foreign.map((q) => `question:${q.id}`).join(','), 'Chỉ người tạo câu hoặc quản lý mới ẩn được câu này.', ip);
+    for (const q of rows) db.run("UPDATE questions SET status = 'archived', updated_at = ? WHERE id = ?", now(), q.id);
+    audit(user, 'question_archive', ids.map((x) => `#${x}`).join(' '), ip, { target: rows.map((q) => `question:${q.id}`).join(','), old: rows.map((q) => ({ id: q.id, status: q.status })), new: { status: 'archived' } });
     return { ok: true };
   });
 
@@ -585,7 +642,7 @@ export function createApp(config = {}) {
     const school = db.get('SELECT name FROM schools WHERE id = ?', user.school_id);
     const variants = e.variants.map((v) => ({ code: v.code, layout: variantLayout(e.id, e.items, v) }));
     const buf = await examToDocx({ title: e.title, school: school.name, durationMin: e.duration_min }, variants, e.snapshot, { withSolutions: query.solutions === '1', baseItems: e.items });
-    audit(user, 'exam_export_docx', `#${e.id}`, ip);
+    audit(user, 'exam_export_docx', `#${e.id}`, ip, { target: `exam:${e.id}` });
     const safe = e.title.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^\w-]+/g, '-').slice(0, 60);
     return { __file: { name: `${safe || 'de-thi'}.docx`, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: buf } };
   });
@@ -784,6 +841,81 @@ export function createApp(config = {}) {
       topics: Object.values(topicAgg).map((x) => ({ ...x, ratio: x.max ? x.points / x.max : 0 })).sort((x, y) => x.ratio - y.ratio),
     };
   });
+  route('DELETE', '/api/questions/:id', STAFF, ({ user, params, body, ip }) => {
+    const q = db.get('SELECT * FROM questions WHERE id = ?', params.id);
+    if (!q) fail(404, 'Không tìm thấy câu hỏi.');
+    const target = `question:${q.id}`;
+    if (q.school_id !== user.school_id) deny(user, 'question_delete', target, 'Câu hỏi không thuộc trường của bạn.', ip);
+    if (user.role !== 'admin' && q.created_by !== user.id) deny(user, 'question_delete', target, 'Chỉ người tạo câu hoặc quản lý mới xóa được câu này.', ip);
+    const reason = needReason(body);
+    // Xóa mềm: câu chuyển sang "lưu trữ", đề đã giao và lịch sử làm bài giữ nguyên.
+    db.run("UPDATE questions SET status = 'archived', updated_at = ? WHERE id = ?", now(), q.id);
+    audit(user, 'question_delete', `#${q.id}`, ip, { target, old: { status: q.status, stem: String(q.stem).slice(0, 120) }, new: { status: 'archived' }, reason });
+    return { ok: true };
+  });
+  route('POST', '/api/attempts/:id/reopen', STAFF, ({ user, params, body, ip }) => {
+    const { att } = staffAttempt(user, params.id, 'attempt_reopen', ip);
+    const reason = needReason(body);
+    if (att.status === 'in_progress') fail(400, 'Bài đang làm, không cần mở lại.');
+    const minutes = Math.min(180, Math.max(5, Number(body.minutes) || 15));
+    const deadline = now() + minutes * 60000;
+    db.tx(() => {
+      db.run('DELETE FROM evidence WHERE attempt_id = ?', att.id);
+      db.run("UPDATE attempts SET status = 'in_progress', submitted_at = NULL, score10 = NULL, points = NULL, max_points = NULL, result_json = NULL, diagnosis_json = NULL, late_json = NULL, deadline_at = ? WHERE id = ?", deadline, att.id);
+    });
+    audit(user, 'attempt_reopen', `bài làm #${att.id}`, ip, { target: `attempt:${att.id}`, old: { status: att.status, score10: att.score10, deadline_at: att.deadline_at }, new: { status: 'in_progress', deadline_at: deadline }, reason });
+    return { ok: true, deadlineAt: deadline };
+  });
+  route('POST', '/api/attempts/:id/score', STAFF, ({ user, params, body, ip }) => {
+    const { att } = staffAttempt(user, params.id, 'score_edit', ip);
+    const reason = needReason(body);
+    if (att.status === 'in_progress') fail(400, 'Bài chưa nộp, chưa sửa điểm được.');
+    const score = Number(body.score10);
+    if (body.score10 === undefined || body.score10 === null || body.score10 === '' || !Number.isFinite(score) || score < 0 || score > 10) fail(400, 'Điểm phải từ 0 đến 10.');
+    const score10 = Math.round(score * 100) / 100;
+    const points = Math.round((score10 / 10) * (att.max_points ?? 0) * 100) / 100;
+    db.run('UPDATE attempts SET score10 = ?, points = ? WHERE id = ?', score10, points, att.id);
+    audit(user, 'score_edit', `bài làm #${att.id}`, ip, { target: `attempt:${att.id}`, old: { score10: att.score10, points: att.points }, new: { score10, points }, reason });
+    return { ok: true, score10 };
+  });
+  route('POST', '/api/attempts/:id/extend', STAFF, ({ user, params, body, ip }) => {
+    const { att } = staffAttempt(user, params.id, 'attempt_extend', ip);
+    if (att.status !== 'in_progress') fail(400, 'Chỉ gia hạn được bài đang làm. Với bài đã nộp hãy mở lại.');
+    if (!Number(body.minutes)) fail(400, 'Nhập số phút gia hạn.');
+    const minutes = Math.min(120, Math.max(1, Number(body.minutes)));
+    const deadline = (att.deadline_at ?? now()) + minutes * 60000;
+    db.run('UPDATE attempts SET deadline_at = ? WHERE id = ?', deadline, att.id);
+    audit(user, 'attempt_extend', `bài làm #${att.id} +${minutes} phút`, ip, { target: `attempt:${att.id}`, old: { deadline_at: att.deadline_at }, new: { deadline_at: deadline }, reason: body.reason });
+    return { ok: true, deadlineAt: deadline };
+  });
+  route('POST', '/api/assignments/:id/extend', STAFF, ({ user, params, body, ip }) => {
+    const a = db.get('SELECT * FROM assignments WHERE id = ?', params.id);
+    if (!a) fail(404, 'Không tìm thấy bài giao.');
+    const target = `assignment:${a.id}`;
+    if (a.school_id !== user.school_id) deny(user, 'assignment_extend', target, 'Bài giao không thuộc trường của bạn.', ip);
+    if (!teacherClassIds(user).includes(a.class_id)) deny(user, 'assignment_extend', target, 'Bạn không phụ trách lớp này.', ip);
+    const closeAt = Number(body.closeAt) || a.close_at + Math.min(14 * 1440, Math.max(0, Number(body.minutes) || 0)) * 60000;
+    if (closeAt <= a.close_at) fail(400, 'Giờ đóng mới phải sau giờ đóng hiện tại.');
+    db.tx(() => {
+      db.run('UPDATE assignments SET close_at = ? WHERE id = ?', closeAt, a.id);
+      db.run("UPDATE attempts SET deadline_at = ? WHERE assignment_id = ? AND status = 'in_progress' AND deadline_at = ?", closeAt, a.id, a.close_at);
+    });
+    audit(user, 'assignment_extend', `bài giao #${a.id}`, ip, { target, old: { close_at: a.close_at }, new: { close_at: closeAt }, reason: body.reason });
+    return { ok: true, closeAt };
+  });
+  route('GET', '/api/assignments/:id/export.csv', STAFF, ({ user, params, ip }) => {
+    const a = db.get('SELECT * FROM assignments WHERE id = ?', params.id);
+    if (!a) fail(404, 'Không tìm thấy bài giao.');
+    const target = `assignment:${a.id}`;
+    if (a.school_id !== user.school_id) deny(user, 'data_export', target, 'Bài giao không thuộc trường của bạn.', ip);
+    if (!teacherClassIds(user).includes(a.class_id)) deny(user, 'data_export', target, 'Bạn không phụ trách lớp này.', ip);
+    sweepExpired('AND assignment_id = ?', a.id);
+    const rows = db.all("SELECT u.display_name, u.username, t.variant_code, t.status, t.score10 FROM users u LEFT JOIN attempts t ON t.student_id = u.id AND t.assignment_id = ? WHERE u.class_id = ? AND u.role = 'student' AND u.active = 1 ORDER BY u.display_name", a.id, a.class_id);
+    const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = '\uFEFF' + ['Họ tên,Tên đăng nhập,Mã đề,Trạng thái,Điểm', ...rows.map((r) => [r.display_name, r.username, r.variant_code, r.status ?? 'chưa làm', r.status && r.status !== 'in_progress' ? r.score10 : ''].map(cell).join(','))].join('\r\n');
+    audit(user, 'data_export', `điểm bài giao #${a.id}: ${rows.length} dòng`, ip, { target });
+    return { __file: { name: `diem-bai-giao-${a.id}.csv`, type: 'text/csv; charset=utf-8', data: Buffer.from(csv, 'utf8') } };
+  });
   route('POST', '/api/attempts/:id/accept-late', STAFF, ({ user, params, ip }) => {
     const att = db.get('SELECT * FROM attempts WHERE id = ? AND school_id = ?', params.id, user.school_id);
     if (!att || !att.late || att.late.accepted) fail(400, 'Bài này không có bản đồng bộ muộn chờ duyệt.');
@@ -794,7 +926,7 @@ export function createApp(config = {}) {
       finalize({ ...att, checked: {} }, att.late.responses, att.late.times, att.status);
       db.run('UPDATE attempts SET late_json = ? WHERE id = ?', JSON.stringify({ ...att.late, accepted: true, acceptedBy: user.id }), att.id);
     });
-    audit(user, 'late_accept', `bài làm #${att.id}`, ip);
+    audit(user, 'late_accept', `bài làm #${att.id}`, ip, { target: `attempt:${att.id}`, old: { score10: att.score10 }, new: { score10: db.get('SELECT score10 FROM attempts WHERE id = ?', att.id).score10 } });
     return { ok: true };
   });
   route('GET', '/api/teacher/attempts/:id', STAFF, ({ user, params, ip }) => {
@@ -1097,13 +1229,13 @@ export function createApp(config = {}) {
     audit(user, 'user_create', `${role} ${username}`, ip);
     return { id: Number(r.lastInsertRowid), tempPassword: pw };
   });
-  route('POST', '/api/admin/users/:id/reset-password', ['admin'], ({ user, params, ip }) => {
+  route('POST', '/api/admin/users/:id/reset-password', ['admin'], ({ user, params, body, ip }) => {
     const u = db.get('SELECT id, username FROM users WHERE id = ? AND school_id = ?', params.id, user.school_id);
     if (!u) fail(404, 'Không tìm thấy người dùng.');
     const pw = tempPassword();
     db.run('UPDATE users SET pass_hash = ? WHERE id = ?', hashPassword(pw), u.id);
     db.run('DELETE FROM sessions WHERE user_id = ?', u.id);
-    audit(user, 'password_reset', u.username, ip);
+    audit(user, 'password_reset', u.username, ip, { target: `user:${u.id}`, reason: body?.reason });
     return { tempPassword: pw };
   });
   route('POST', '/api/admin/classes', ['admin'], ({ user, body, ip }) => {
@@ -1125,13 +1257,20 @@ export function createApp(config = {}) {
     audit(user, 'class_assign_teacher', `${c.name} → #${teacherId}`, ip);
     return { ok: true };
   });
-  route('GET', '/api/admin/audit', ['admin'], ({ user, query }) => ({
-    entries: db.all(
-      'SELECT l.id, l.action, l.detail, l.ip, l.at, u.display_name, u.role FROM audit_log l LEFT JOIN users u ON u.id = l.user_id WHERE l.school_id = ? ORDER BY l.id DESC LIMIT ?',
-      user.school_id,
-      Math.min(500, Number(query.limit) || 200),
-    ),
-  }));
+  route('GET', '/api/admin/audit', ['admin'], ({ user, query }) => {
+    const where = ['l.school_id = ?'];
+    const p = [user.school_id];
+    if (query.action) (where.push('l.action = ?'), p.push(query.action));
+    if (query.outcome) (where.push('l.outcome = ?'), p.push(query.outcome));
+    if (query.beforeId) (where.push('l.id < ?'), p.push(Number(query.beforeId)));
+    return {
+      entries: db.all(
+        `SELECT l.id, l.action, l.detail, l.ip, l.at, l.target, l.old_json, l.new_json, l.reason, l.outcome, l.user_id, u.display_name, u.role FROM audit_log l LEFT JOIN users u ON u.id = l.user_id WHERE ${where.join(' AND ')} ORDER BY l.id DESC LIMIT ?`,
+        ...p,
+        Math.min(500, Number(query.limit) || 200),
+      ),
+    };
+  });
 
   // ---- nhập học sinh hàng loạt ----
   function makeUsername(name, prefix) {
@@ -1306,7 +1445,10 @@ export function createApp(config = {}) {
       const cookies = parseCookies(req.headers.cookie);
       const { token, user } = authUser(cookies);
       if (r.roles && !user) fail(401, 'Phiên đăng nhập đã hết. Đăng nhập lại.');
-      if (r.roles && !r.roles.includes(user.role)) fail(403, 'Bạn không có quyền làm việc này.');
+      if (r.roles && !r.roles.includes(user.role)) {
+        audit(user, 'denied', `${req.method} ${r.pattern}`, req.socket?.remoteAddress, { target: url.pathname, outcome: 'denied' });
+        fail(403, 'Bạn không có quyền làm việc này.');
+      }
       let raw = null;
       let body = {};
       if (req.method !== 'GET') {

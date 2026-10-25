@@ -82,6 +82,11 @@ const ADDED_COLUMNS = [
   ['assignments', 'variant_map_json', 'TEXT'],
   ['review_items', 'due_day', 'TEXT'],
   ['review_items', 'last_day', 'TEXT'],
+  ['audit_log', 'target', 'TEXT'],
+  ['audit_log', 'old_json', 'TEXT'],
+  ['audit_log', 'new_json', 'TEXT'],
+  ['audit_log', 'reason', 'TEXT'],
+  ['audit_log', 'outcome', "TEXT NOT NULL DEFAULT 'ok'"],
 ];
 
 export function migrate(db) {
@@ -89,6 +94,9 @@ export function migrate(db) {
     const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col);
     if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
   }
+  // Nhật ký chỉ thêm: CSDL từ chối sửa/xóa dù là qua API hay câu lệnh trực tiếp.
+  db.exec(`CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_log BEGIN SELECT RAISE(ABORT, 'Nhật ký chỉ được thêm, không được sửa'); END;
+    CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log BEGIN SELECT RAISE(ABORT, 'Nhật ký chỉ được thêm, không được xóa'); END;`);
   // Mục ôn cũ chỉ có due_at (ms): suy ra ngày đến hạn theo lịch Việt Nam.
   const upd = db.prepare('UPDATE review_items SET due_day = ? WHERE student_id = ? AND qid = ?');
   for (const r of db.prepare('SELECT student_id, qid, due_at FROM review_items WHERE due_day IS NULL').all()) upd.run(vnDay(r.due_at), r.student_id, r.qid);

@@ -108,3 +108,24 @@ Chưa thử: học sinh truy cập thật từ máy khác qua mạng LAN (phụ 
 - Test mới `tests/spaced.test.mjs` (8 test).
 
 **Chưa làm / lưu ý:** giao diện chưa hiển thị thống kê quá hạn cho giáo viên. `updateReview` cũ trong `shared/diagnose.mjs` không còn được dùng ở máy chủ (giữ lại vì test cũ). Chưa kiểm thử giờ mùa hè (Việt Nam không có).
+
+## 9. Bản 0.3 — Nâng cấp 3: nhật ký và kiểm soát quyền (25/10/2026)
+
+**Đã làm (có test, `tests/audit.test.mjs`, 9 test):**
+- `audit_log` thêm cột `target`, `old_json`, `new_json`, `reason`, `outcome` (`ok` | `denied`); di trú an toàn cho nhật ký cũ (test). **Chỉ thêm**: trigger SQLite chặn UPDATE/DELETE, API không có đường sửa/xóa (404).
+- Thao tác nhạy cảm, mỗi lần thành công đúng **một** dòng (ai, lúc nào, đối tượng, giá trị cũ/mới, lý do):
+  - mở lại lượt thi `POST /api/attempts/:id/reopen` (lý do bắt buộc ≥ 5 ký tự; xóa bằng chứng cũ của lượt, đặt hạn mới);
+  - sửa điểm `POST /api/attempts/:id/score` (lý do bắt buộc, điểm 0–10);
+  - gia hạn bài giao `POST /api/assignments/:id/extend` và bài làm `POST /api/attempts/:id/extend`;
+  - xóa câu `DELETE /api/questions/:id` (xóa mềm → lưu trữ, lý do bắt buộc);
+  - đổi đáp án câu **đã dùng** (đã có bằng chứng hoặc nằm trong đề) qua `PUT /api/questions/:id` — lý do bắt buộc; đổi chỗ khác chỉ là `question_edit`;
+  - xuất dữ liệu: `GET /api/assignments/:id/export.csv` (điểm theo lớp) và xuất Word đề;
+  - đặt lại mật khẩu (không ghi mật khẩu vào nhật ký); nhận bài nộp muộn có điểm cũ/mới.
+- Quyền kiểm tra ở API: giáo viên chỉ tác động lên lớp mình phụ trách; sửa/xóa/đổi đáp án câu chỉ người tạo hoặc quản lý; thao tác chéo trường bị chặn. Mọi lần bị từ chối ghi một dòng `outcome = denied` vào nhật ký của trường người thử (sai vai trò: dòng `denied` kèm đường dẫn API; sai đối tượng: dòng theo tên thao tác). Việc "ẩn câu" hàng loạt giờ cũng cần là người tạo/quản lý.
+- `GET /api/admin/audit` (chỉ quản lý) thêm bộ lọc `action`, `outcome`, `beforeId` và trả đủ cột mới; chỉ thấy trường mình. Nhãn tiếng Việt cho các thao tác mới trong `Admin.tsx`.
+
+**Chưa làm / hạn chế:**
+- Giao diện chưa có nút mở lại / sửa điểm / gia hạn / xuất CSV / ô nhập lý do (API sẵn sàng).
+- Mở lại lượt thi không hoàn tác XP, chuỗi ngày và lịch ôn đã tính từ lần nộp trước.
+- Yêu cầu sai dữ liệu (thiếu lý do, điểm ngoài thang) trả 400 và không ghi nhật ký; yêu cầu chưa đăng nhập không ghi.
+- Các thao tác cũ (đăng nhập, tạo đề…) vẫn ghi như trước, chưa có giá trị cũ/mới. Giáo viên chưa có trang xem nhật ký của riêng mình.
