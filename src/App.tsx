@@ -17,6 +17,7 @@ import { ResultPage } from './pages/student/Result';
 import { PracticeHub } from './pages/student/Practice';
 import { Progress } from './pages/student/Progress';
 import { AdminHome, Users, Audit } from './pages/admin/Admin';
+import { Appeals } from './pages/teacher/Appeals';
 
 type Nav = { path: string; label: string; icon: string };
 const NAV: Record<User['role'], Nav[]> = {
@@ -26,6 +27,7 @@ const NAV: Record<User['role'], Nav[]> = {
     { path: '/nhap-de', label: 'Nhập đề', icon: 'import' },
     { path: '/de-thi', label: 'Đề thi', icon: 'exam' },
     { path: '/bai-giao', label: 'Kết quả', icon: 'report' },
+    { path: '/khieu-nai', label: 'Khiếu nại', icon: 'log' },
   ],
   admin: [
     { path: '/', label: 'Toàn trường', icon: 'school' },
@@ -101,6 +103,7 @@ export function App() {
           ['/de-thi', () => <Exams />],
           ['/de-thi/:id', ([id]) => <ExamDetail key={id} id={Number(id)} />],
           ['/bai-giao', () => <Assignments />],
+          ['/khieu-nai', () => <Appeals />],
           ['/bai-giao/:id', ([id]) => <Report key={id} id={Number(id)} />],
           ['/lop/:id', ([id]) => <ClassView key={id} id={Number(id)} />],
           ['/hoc-sinh/:id', ([id]) => <StudentProfilePage key={id} id={Number(id)} />],

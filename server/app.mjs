@@ -303,13 +303,13 @@ export function createApp(config = {}) {
   }
 
   /** Chốt bài: chấm, chẩn đoán, ghi bằng chứng. Gọi trong giao dịch. Bỏ qua câu đã "kiểm tra" khi luyện tập. */
-  function finalize(att, responses, times, status) {
+  function finalize(att, responses, times, status, opts = {}) {
     const qmap = attemptQuestions(att);
     const qs = att.layout.map((it) => qmap[it.qid]);
     const orig = originalResponses(att, responses);
     const grade = gradeAttempt(qs, orig);
     const diag = diagnoseAttempt(qs, orig, times);
-    const t = now();
+    const t = opts.rescore ? att.submitted_at ?? now() : now();
     db.run(
       `UPDATE attempts SET status = ?, submitted_at = ?, responses_json = ?, times_json = ?, score10 = ?, points = ?, max_points = ?, result_json = ?, diagnosis_json = ? WHERE id = ?`,
       status,
@@ -333,7 +333,7 @@ export function createApp(config = {}) {
       n++;
       if (g.correct) nc++;
     }
-    bumpActivity(att.student_id, n, nc, att.kind === 'assignment' ? 50 + nc * 5 : nc * 10 + n * 2);
+    if (!opts.rescore) bumpActivity(att.student_id, n, nc, att.kind === 'assignment' ? 50 + nc * 5 : nc * 10 + n * 2);
     return getAttempt(att.id);
   }
 
@@ -1041,11 +1041,12 @@ export function createApp(config = {}) {
     if (closeAt <= openAt) fail(400, 'Giờ đóng phải sau giờ mở.');
     const duration = Math.max(5, Number(body.durationMin) || exam.duration_min);
     const codes = exam.variants.map((v) => v.code);
-    const variantMode = body.variantMode === 'list' ? 'list' : 'random';
+    const variantMode = body.variantMode === 'list' ? 'list' : body.variantMode === 'per_student' ? 'per_student' : 'random';
     const list = variantMode === 'list' && body.variantList && typeof body.variantList === 'object' ? body.variantList : {};
     const plans = classIds.map((c) => {
       const studentIds = db.all("SELECT id FROM users WHERE class_id = ? AND school_id = ? AND role = 'student' AND active = 1 ORDER BY id", c, user.school_id).map((r) => r.id);
       const own = Object.fromEntries(Object.entries(list).filter(([sid]) => studentIds.includes(Number(sid))));
+      if (variantMode === 'per_student') return {};
       const res = assignVariants({ studentIds, codes, mode: variantMode, seed: `${exam.id}-${c}-${body.variantSeed ?? now()}`, list: own });
       if (res.errors.length) fail(400, res.errors.join(' '));
       return res.map;
@@ -1137,6 +1138,10 @@ export function createApp(config = {}) {
       if (choices && done.length >= 5) {
         const top = choices.slice(0, 4).map((n, i) => ({ n, i })).sort((x, y) => y.n - x.n)[0];
         if (top.i !== q.answer && top.n > choices[q.answer]) flags.push(`Phương án ${'ABCD'[top.i]} (gốc) được chọn nhiều hơn đáp án`);
+      }
+      if (choices && done.length >= 10) {
+        const dead = choices.slice(0, 4).map((n, i) => ({ n, i })).filter((x) => x.i !== q.answer && x.n === 0);
+        if (dead.length) flags.push(`Phương án nhiễu ${dead.map((x) => 'ABCD'[x.i]).join(', ')} (gốc) không ai chọn — nên thay bằng lỗi sai phổ biến hơn`);
       }
       return { qid: it.qid, type: q.type, topic: q.topic, level: q.level, stem: q.stem, options: q.options, answer: q.answer, p, disc, choices, flags };
     });
@@ -1295,6 +1300,113 @@ export function createApp(config = {}) {
     audit(user, 'data_export', `ngân hàng câu hỏi (Excel): ${rows.length} câu`, ip, { target: 'questions' });
     return { __file: { name: 'ngan-hang-cau-hoi.xlsx', type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', data } };
   });
+  // ---- khiếu nại điểm ----
+  const APPEAL_DAYS = 14;
+  route('POST', '/api/attempts/:id/appeals', ['student'], ({ user, params, body, ip }) => {
+    const att = ownAttempt(user, params.id);
+    if (att.kind !== 'assignment' || att.status === 'in_progress') fail(400, 'Chỉ khiếu nại được bài đã nộp.');
+    if (!resultVisible(att)) fail(403, 'Em chưa xem được kết quả bài này nên chưa khiếu nại được.');
+    const asg = db.get('SELECT close_at FROM assignments WHERE id = ?', att.assignment_id);
+    if (now() > Math.max(asg.close_at, att.submitted_at ?? 0) + APPEAL_DAYS * 86400000) fail(400, `Đã quá ${APPEAL_DAYS} ngày kể từ khi có kết quả.`);
+    const reason = String(body.reason ?? '').trim();
+    if (reason.length < 10) fail(400, 'Hãy nêu lý do cụ thể (ít nhất 10 ký tự).');
+    const qid = body.qid === undefined || body.qid === null ? null : Number(body.qid);
+    if (qid !== null && !att.layout.some((x) => x.qid === qid)) fail(400, 'Câu này không có trong bài của em.');
+    const open = db.all("SELECT qid FROM score_appeals WHERE attempt_id = ? AND status = 'open'", att.id);
+    if (open.some((x) => x.qid === qid)) fail(409, 'Em đã gửi khiếu nại cho câu này, đang chờ giáo viên.');
+    if (open.length >= 5) fail(429, 'Em đang có quá nhiều khiếu nại chưa được xử lý.');
+    const id = Number(db.run('INSERT INTO score_appeals (school_id, attempt_id, student_id, qid, reason, created_at) VALUES (?,?,?,?,?,?)', user.school_id, att.id, user.id, qid, reason.slice(0, 1000), now()).lastInsertRowid);
+    audit(user, 'appeal_create', `bài làm #${att.id}${qid ? ` câu #${qid}` : ''}`, ip, { target: `appeal:${id}`, reason });
+    return { id };
+  });
+  route('GET', '/api/student/appeals', ['student'], ({ user }) => ({
+    appeals: db
+      .all('SELECT a.id, a.attempt_id, a.qid, a.reason, a.status, a.note, a.created_at, a.resolved_at, s.title FROM score_appeals a JOIN attempts s ON s.id = a.attempt_id WHERE a.student_id = ? ORDER BY a.id DESC', user.id)
+      .map((a) => ({ id: a.id, attemptId: a.attempt_id, qid: a.qid, title: a.title, reason: a.reason, status: a.status, note: a.note, createdAt: a.created_at, resolvedAt: a.resolved_at })),
+  }));
+  route('GET', '/api/appeals', STAFF, ({ user, query }) => {
+    const ids = teacherClassIds(user);
+    if (!ids.length) return { appeals: [] };
+    const rows = db.all(
+      `SELECT a.id, a.attempt_id, a.qid, a.reason, a.status, a.note, a.created_at, a.resolved_at, u.display_name student, s.title, s.score10, c.name class_name
+       FROM score_appeals a JOIN attempts s ON s.id = a.attempt_id JOIN assignments g ON g.id = s.assignment_id JOIN classes c ON c.id = g.class_id JOIN users u ON u.id = a.student_id
+       WHERE a.school_id = ? AND g.class_id IN (${ids.map(() => '?').join(',')}) ${query.status ? 'AND a.status = ?' : ''} ORDER BY (a.status = 'open') DESC, a.id DESC LIMIT 200`,
+      user.school_id,
+      ...ids,
+      ...(query.status ? [String(query.status)] : []),
+    );
+    return { appeals: rows.map((a) => ({ id: a.id, attemptId: a.attempt_id, qid: a.qid, student: a.student, className: a.class_name, title: a.title, score10: a.score10, reason: a.reason, status: a.status, note: a.note, createdAt: a.created_at, resolvedAt: a.resolved_at })) };
+  });
+  route('POST', '/api/appeals/:id/resolve', STAFF, ({ user, params, body, ip }) => {
+    const ap = db.get('SELECT * FROM score_appeals WHERE id = ?', params.id);
+    if (!ap) fail(404, 'Không tìm thấy khiếu nại.');
+    const target = `appeal:${ap.id}`;
+    if (ap.school_id !== user.school_id) deny(user, 'appeal_resolve', target, 'Khiếu nại không thuộc trường của bạn.', ip);
+    const att = db.get('SELECT * FROM attempts WHERE id = ?', ap.attempt_id);
+    const asg = db.get('SELECT class_id FROM assignments WHERE id = ?', att.assignment_id);
+    if (!teacherClassIds(user).includes(asg.class_id)) deny(user, 'appeal_resolve', target, 'Bạn không phụ trách lớp này.', ip);
+    if (ap.status !== 'open') fail(400, 'Khiếu nại này đã được xử lý.');
+    const note = needReason({ reason: body.note });
+    if (!['accept', 'reject'].includes(body.decision)) fail(400, 'Chọn chấp nhận hoặc từ chối.');
+    let old = null;
+    let next = null;
+    if (body.decision === 'accept') {
+      old = { score10: att.score10, points: att.points };
+      let points;
+      let score10;
+      if (body.creditQuestion) {
+        if (ap.qid === null) fail(400, 'Khiếu nại không gắn với câu nào để cho điểm câu.');
+        const item = att.result?.items?.find((x) => x.qid === ap.qid);
+        if (!item) fail(400, 'Không tìm thấy kết quả câu này.');
+        points = Math.round((att.points + (item.max - item.points) / 1000) * 1000) / 1000;
+        score10 = att.max_points ? Math.round((points / att.max_points) * 10 * 100) / 100 : att.score10;
+        const patched = { ...att.result, items: att.result.items.map((x) => (x.qid === ap.qid ? { ...x, points: x.max, correct: true, appealCredit: true } : x)) };
+        db.run('UPDATE attempts SET result_json = ? WHERE id = ?', JSON.stringify(patched), att.id);
+        db.run('UPDATE evidence SET score = 1, correct = 1, error_type = NULL WHERE attempt_id = ? AND qid = ?', att.id, ap.qid);
+      } else {
+        const v = Number(body.newScore10);
+        if (body.newScore10 === undefined || body.newScore10 === null || body.newScore10 === '' || !Number.isFinite(v) || v < 0 || v > 10) fail(400, 'Nhập điểm mới từ 0 đến 10, hoặc chọn cho điểm câu bị khiếu nại.');
+        score10 = Math.round(v * 100) / 100;
+        points = Math.round((score10 / 10) * (att.max_points ?? 0) * 100) / 100;
+      }
+      db.run('UPDATE attempts SET score10 = ?, points = ? WHERE id = ?', score10, points, att.id);
+      next = { score10, points };
+    }
+    db.run('UPDATE score_appeals SET status = ?, note = ?, resolution_json = ?, resolved_by = ?, resolved_at = ? WHERE id = ?', body.decision === 'accept' ? 'accepted' : 'rejected', note, JSON.stringify({ old, new: next }), user.id, now(), ap.id);
+    audit(user, 'appeal_resolve', `khiếu nại #${ap.id}: ${body.decision === 'accept' ? 'chấp nhận' : 'từ chối'}`, ip, { target, old: old ?? undefined, new: next ?? { decision: 'reject' }, reason: note });
+    return { ok: true, status: body.decision === 'accept' ? 'accepted' : 'rejected', score10: next?.score10 ?? att.score10 };
+  });
+
+  // ---- sửa đáp án của đề đã giao + chấm lại ----
+  route('POST', '/api/exams/:id/fix-answer', STAFF, ({ user, params, body, ip }) => {
+    const e = db.get('SELECT * FROM exams WHERE id = ?', params.id);
+    if (!e) fail(404, 'Không tìm thấy đề.');
+    const target = `exam:${e.id}`;
+    if (e.school_id !== user.school_id) deny(user, 'exam_answer_fix', target, 'Đề không thuộc trường của bạn.', ip);
+    if (user.role !== 'admin' && e.created_by !== user.id) deny(user, 'exam_answer_fix', target, 'Chỉ người ra đề hoặc quản lý mới sửa đáp án đề đã giao.', ip);
+    const qid = Number(body.qid);
+    const q = e.snapshot[qid];
+    if (!q) fail(400, 'Câu này không có trong đề.');
+    const reason = needReason(body);
+    const candidate = { ...q, answer: body.answer };
+    const errs = validateQuestion({ ...candidate, topic: q.topic ?? 'T10.MENHDE', level: q.level ?? 1 }).filter((m) => /đáp án|Chọn/i.test(m));
+    if (errs.length) fail(400, errs.join(' '));
+    if (sameAnswer(q.type, q.answer, body.answer)) fail(400, 'Đáp án mới giống đáp án hiện tại.');
+    const snapshot = { ...e.snapshot, [qid]: { ...q, answer: body.answer } };
+    const attempts = db.all("SELECT t.* FROM attempts t JOIN assignments a ON a.id = t.assignment_id WHERE a.exam_id = ? AND t.status != 'in_progress'", e.id);
+    let changed = 0;
+    db.tx(() => {
+      db.run('UPDATE exams SET snapshot_json = ? WHERE id = ?', JSON.stringify(snapshot), e.id);
+      for (const t of attempts) {
+        db.run('DELETE FROM evidence WHERE attempt_id = ?', t.id);
+        const after = finalize({ ...t, checked: {} }, t.responses, t.times, t.status, { rescore: true });
+        if (after.score10 !== t.score10) changed++;
+      }
+    });
+    audit(user, 'exam_answer_fix', `đề #${e.id} câu #${qid}: chấm lại ${attempts.length} bài, ${changed} bài đổi điểm`, ip, { target, old: { qid, answer: q.answer }, new: { qid, answer: body.answer, regraded: attempts.length, changed }, reason });
+    return { ok: true, regraded: attempts.length, changed };
+  });
+
   route('POST', '/api/attempts/:id/accept-late', STAFF, ({ user, params, ip }) => {
     const att = db.get('SELECT * FROM attempts WHERE id = ? AND school_id = ?', params.id, user.school_id);
     if (!att || !att.late || att.late.accepted) fail(400, 'Bài này không có bản đồng bộ muộn chờ duyệt.');
@@ -1377,10 +1489,11 @@ export function createApp(config = {}) {
     const exam = db.get('SELECT * FROM exams WHERE id = ?', a.exam_id);
     // Mã đề: theo bảng chia của bài giao; em vào lớp sau khi giao thì chia theo băm cố định.
     const codes = exam.variants.map((v) => v.code);
-    let code = a.variant_map?.[user.id];
-    if (!codes.includes(code)) code = codes[hashSeed(`${a.id}-${user.id}`) % codes.length];
-    const variant = exam.variants.find((v) => v.code === code);
-    const layout = variantLayout(exam.id, exam.items, variant);
+    // Chế độ "mỗi em một thứ tự": bố cục riêng theo (bài giao, học sinh), không có mã đề chung.
+    const perStudent = a.variant_mode === 'per_student';
+    let code = perStudent ? null : a.variant_map?.[user.id];
+    if (!perStudent && !codes.includes(code)) code = codes[hashSeed(`${a.id}-${user.id}`) % codes.length];
+    const layout = perStudent ? makeVariant(exam.items, `${a.id}-${user.id}-${exam.id}`) : variantLayout(exam.id, exam.items, exam.variants.find((v) => v.code === code));
     const deadline = a.mode === 'exam' ? Math.min(t + a.duration_min * 60000, a.close_at) : a.close_at;
     const r = db.run(
       'INSERT INTO attempts (school_id, assignment_id, student_id, kind, title, layout_json, started_at, deadline_at, client_id, variant_code) VALUES (?,?,?,?,?,?,?,?,?,?)',

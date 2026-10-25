@@ -4,7 +4,7 @@ import { MathText } from '../../ui/MathText';
 import { Bar, ErrorBox, ErrorTypeBadge, fmtScore, go, Loading, Mascot, pct, scoreColor, useApp, useAsync } from '../../ui/kit';
 import { QuestionView } from '../../ui/Question';
 
-export function AttemptReview({ data, showAll = false }: { data: any; showAll?: boolean }) {
+export function AttemptReview({ data, showAll = false, onAppeal }: { data: any; showAll?: boolean; onAppeal?: (qid: number) => void }) {
   const [filter, setFilter] = useState<'wrong' | 'all'>(showAll ? 'all' : 'wrong');
   const r = data.result;
   const byQ = Object.fromEntries(r.items.map((x: any) => [x.qid, x]));
@@ -29,6 +29,13 @@ export function AttemptReview({ data, showAll = false }: { data: any; showAll?: 
           return (
             <div key={it.qid} className="card flat">
               <QuestionView item={it} response={data.responses?.[it.qid]} review={{ correctAnswer: x.correctAnswer, explanation: x.explanation, source: x.source, grade: x.grade, diagnosis: x.diagnosis }} />
+              {onAppeal && (
+                <div className="row mt">
+                  <button className="btn ghost sm" onClick={() => onAppeal(it.qid)}>
+                    Em muốn khiếu nại câu này
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -147,7 +154,23 @@ export function ResultPage({ attemptId }: { attemptId: number }) {
         </div>
       </div>
       <ResultSummary data={data} />
-      <AttemptReview data={data} />
+      <AttemptReview
+        data={data}
+        onAppeal={
+          data.kind === 'practice'
+            ? undefined
+            : async (qid) => {
+                const reason = prompt('Em khiếu nại câu này vì lý do gì? (ít nhất 10 ký tự, nêu cụ thể)');
+                if (!reason) return;
+                try {
+                  await post(`/api/attempts/${data.id}/appeals`, { qid, reason });
+                  toast('Đã gửi khiếu nại. Giáo viên sẽ trả lời em.');
+                } catch (e: any) {
+                  toast(e.message);
+                }
+              }
+        }
+      />
       <div className="small muted center">
         <MathText text="Mỗi câu sai đã được thêm vào Sổ lỗi sai. Hệ thống nhắc ôn lại sau 1, 3, 7, 14 ngày." />
       </div>

@@ -204,3 +204,14 @@ Chi tiết số liệu và giới hạn ở `docs/do-chinh-xac.md`. `npm run che
 - **Từ kết quả đến hành động một chạm** (mục 15): `GET /api/classes/:id/weak-groups` (học sinh dưới 50% ở một chuyên đề, đã làm ≥ 3 câu) và `POST /api/classes/:id/practice-assignment` — tự chọn câu đã duyệt của chuyên đề (ưu tiên câu các em chưa làm, thiên về mức dễ/vừa), tạo đề và **bài giao chỉ cho nhóm đó** (cột `assignments.target_json`). Học sinh ngoài nhóm không thấy và không vào được; báo cáo, bảng điểm Excel và danh sách mã đề chỉ gồm các em được giao. Chỉ giáo viên phụ trách lớp; mọi lần từ chối được ghi. Trang lớp có thẻ "Nhóm cần hỗ trợ" với nút "Giao phiếu luyện"; Ngân hàng hiện lời giải nháp kèm nút Duyệt/Bỏ.
 
 **Chưa làm / hạn chế:** phiếu luyện chưa có lời nhắc/thông báo cho học sinh ngoài danh sách việc trong trang chủ; chưa có bước giáo viên xem trước/sửa phiếu trước khi giao (giao ngay); "giải thích kiểu lỗi" dùng chung lời giải AI và nhãn nhiễu sẵn có, chưa có luồng riêng cho từng kiểu lỗi.
+
+## 16. Giai đoạn 4 — thi an toàn và công bằng (25/10/2026)
+
+`npm run check`: 134/134 test đạt (thêm `tests/integrity.test.mjs`, 7 test). Mục 16 (lưu bài liên tục, nộp lặp) và 17 (tín hiệu bất thường, chỉ để tham khảo) đã có từ bản đầu và có test tải ở giai đoạn 0.
+
+- **Mỗi em một thứ tự riêng** (mục 16): `variantMode: 'per_student'` khi giao đề — bố cục (thứ tự câu trong phần + thứ tự phương án) riêng theo (bài giao, học sinh), lưu cố định (tải lại trang vẫn như cũ), chấm qua ánh xạ; cùng lựa chọn ở mọi bố cục cho cùng điểm. Không có mã đề chung ở chế độ này (cột mã đề để trống).
+- **Phân tích câu** (mục 18): đã có tỉ lệ điểm, độ phân biệt, phương án bị chọn; thêm cờ "phương án nhiễu không ai chọn" (từ 10 bài trở lên). Test: khóa nhập sai → cờ "Quá khó hoặc sai đáp án" + "phương án B được chọn nhiều hơn đáp án".
+- **Sửa đáp án đề đã giao và chấm lại**: `POST /api/exams/:id/fix-answer` (người ra đề hoặc quản lý; lý do bắt buộc) sửa đáp án trong đề, chấm lại mọi bài đã nộp, **giữ nguyên giờ nộp và không cộng thưởng/XP lần hai**; ghi một dòng nhật ký với đáp án cũ/mới và số bài đổi điểm. Nút "Sửa đáp án đề và chấm lại" xuất hiện cạnh câu bị cờ trong báo cáo.
+- **Khiếu nại điểm**: bảng `score_appeals`. Học sinh gửi từ trang kết quả (chỉ bài đã nộp, đã xem được kết quả, trong 14 ngày, lý do ≥ 10 ký tự, mỗi câu một khiếu nại đang chờ, tối đa 5). Giáo viên phụ trách lớp xem danh sách (`/khieu-nai`), chấp nhận (nhập điểm mới hoặc cho điểm cả câu) hoặc từ chối — ghi chú bắt buộc, một dòng nhật ký có điểm trước/sau. Người lớp khác / trường khác bị từ chối và được ghi nhận.
+
+**Chưa làm / hạn chế:** chấm lại không cập nhật lại lịch ôn giãn cách đã tính lúc nộp; sửa đáp án đề chưa tự sửa luôn ngân hàng câu hỏi (làm riêng ở Ngân hàng, có nhật ký); chưa có thông báo cho học sinh khi khiếu nại được trả lời (xem ở mục khiếu nại của em qua API `GET /api/student/appeals`, chưa có màn riêng); không có chế độ khóa máy — chống gian lận chỉ là tín hiệu.

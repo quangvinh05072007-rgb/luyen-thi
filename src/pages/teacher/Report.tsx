@@ -239,6 +239,27 @@ export function Report({ id }: { id: number }) {
                   {f}
                 </div>
               ))}
+              {it.type === 'mcq' && it.flags.length > 0 && (
+                <button
+                  className="btn sm mt"
+                  onClick={async () => {
+                    const letter = prompt('Đáp án ĐÚNG của câu này theo đề gốc là phương án nào? (A, B, C hoặc D)\nHệ thống sẽ sửa đáp án trong đề và chấm lại mọi bài đã nộp.');
+                    const idx = 'ABCD'.indexOf(String(letter ?? '').trim().toUpperCase());
+                    if (idx < 0) return;
+                    const reason = prompt('Lý do sửa đáp án (bắt buộc, được ghi vào nhật ký):');
+                    if (!reason) return;
+                    try {
+                      const r = await post(`/api/exams/${data.assignment.examId}/fix-answer`, { qid: it.qid, answer: idx, reason });
+                      toast(`Đã chấm lại ${r.regraded} bài, ${r.changed} bài đổi điểm.`);
+                      reload();
+                    } catch (e: any) {
+                      toast(e.message);
+                    }
+                  }}
+                >
+                  Sửa đáp án đề và chấm lại
+                </button>
+              )}
             </div>
           ))}
         </div>

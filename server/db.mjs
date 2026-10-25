@@ -87,6 +87,12 @@ CREATE TABLE IF NOT EXISTS bulk_ops (
   id INTEGER PRIMARY KEY, school_id INTEGER NOT NULL, user_id INTEGER NOT NULL, action TEXT NOT NULL, value TEXT,
   before_json TEXT NOT NULL, at INTEGER NOT NULL, undone_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS score_appeals (
+  id INTEGER PRIMARY KEY, school_id INTEGER NOT NULL, attempt_id INTEGER NOT NULL, student_id INTEGER NOT NULL, qid INTEGER,
+  reason TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','accepted','rejected')),
+  note TEXT, resolution_json TEXT, resolved_by INTEGER, created_at INTEGER NOT NULL, resolved_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS appeal_att ON score_appeals(attempt_id, status);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY, school_id INTEGER, user_id INTEGER, action TEXT NOT NULL, detail TEXT, ip TEXT, at INTEGER NOT NULL
 );
