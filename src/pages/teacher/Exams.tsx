@@ -140,6 +140,19 @@ export function ExamDetail({ id }: { id: number }) {
           <button className="btn" onClick={() => exportDocx(true)}>
             Tải kèm lời giải
           </button>
+          <button
+            className="btn ghost"
+            onClick={() =>
+              post(`/api/exams/${id}/clone`, {})
+                .then((r) => {
+                  toast('Đã nhân bản đề.');
+                  go(`/de-thi/${r.id}`);
+                })
+                .catch((e) => toast(e.message))
+            }
+          >
+            Nhân bản đề
+          </button>
         </div>
       </div>
       <div className="card">

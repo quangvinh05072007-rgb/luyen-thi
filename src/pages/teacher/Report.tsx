@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { get, post } from '../../api';
+import { download, get, post } from '../../api';
 import { MathText } from '../../ui/MathText';
 import { Bar, ErrorBox, ErrorTypeBadge, fmtDateTime, fmtScore, Loading, pct, scoreColor, topicName, useApp, useAsync } from '../../ui/kit';
 
@@ -83,6 +83,14 @@ export function Report({ id }: { id: number }) {
         <h1>{data.assignment.title}</h1>
         <div className="small muted">
           Lớp {data.assignment.className} · {data.assignment.mode === 'exam' ? `thi ${data.assignment.durationMin} phút` : 'bài tập'} · đóng {fmtDateTime(data.assignment.closeAt)}
+        </div>
+        <div className="row mt">
+          <button className="btn sm" onClick={() => download(`/api/assignments/${id}/export.xlsx`, `diem-bai-giao-${id}.xlsx`).catch((e) => toast(e.message))}>
+            Xuất bảng điểm Excel
+          </button>
+          <button className="btn ghost sm" onClick={() => download(`/api/assignments/${id}/export.csv`, `diem-bai-giao-${id}.csv`).catch((e) => toast(e.message))}>
+            CSV
+          </button>
         </div>
       </div>
       <div className="grid-4">

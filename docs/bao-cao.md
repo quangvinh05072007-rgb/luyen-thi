@@ -182,3 +182,16 @@ Chi tiết số liệu và giới hạn ở `docs/do-chinh-xac.md`. `npm run che
 - Lỗi thật đã sửa: đáp án viết liền "ĐSĐS"; `6\%` mất dấu `\`; khoảng trắng thừa quanh công thức; bộ phân loại chuyên đề coi "một" là "mốt".
 
 **Chưa làm / hạn chế:** chưa có đề thật để đo; PDF chỉ thử một file; chưa thử trên Word do người dùng thật soạn; chưa có ô chèn/vẽ hình trong trình soạn câu hỏi.
+
+## 14. Giai đoạn 2 — vận hành hằng ngày (25/10/2026)
+
+`npm run check`: 121/121 test đạt (thêm `tests/ops.test.mjs`, 8 test), build thành công.
+
+- **Excel/CSV đúng tiếng Việt** (mục 10): `shared/xlsxWrite.mjs` ghi .xlsx thật (UTF-8, số là số, tiêu đề in đậm và cố định, chuỗi bắt đầu bằng `= + - @` được vô hiệu hóa để Excel không chạy công thức). **Đã mở thử bằng Microsoft Excel 16**: tên có dấu đúng, ô điểm là số (Double), tiêu đề đậm, `=1+1` không bị tính. API: `GET /api/assignments/:id/export.xlsx` (và `.csv` có thêm cột "Nộp lúc", trạng thái tiếng Việt), `GET /api/questions/export.xlsx` (đúng định dạng mẫu nhập: xuất rồi nhập lại ra đúng câu — có test). Cả hai ghi nhật ký `data_export`; chỉ giáo viên phụ trách lớp.
+- **Lịch sử phiên bản câu hỏi** (mục 8): bảng `question_versions` lưu trạng thái TRƯỚC mỗi lần sửa (sửa tay, hàng loạt, khôi phục). `GET /api/questions/:id/versions`, `POST /api/questions/:id/restore`. Khôi phục đáp án của câu đã dùng cần lý do và đúng người (như đổi đáp án), ghi `question_answer_change`.
+- **Thao tác hàng loạt có hoàn tác** (mục 8): `POST /api/questions/bulk` (đổi chuyên đề, mức độ, lưu trữ, khôi phục về nháp; tối đa 500 câu; chỉ câu của mình hoặc quản lý), mỗi đợt một dòng nhật ký, `POST /api/questions/bulk/:id/undo` — không ghi đè câu đã được sửa tiếp sau đợt đó, chỉ hoàn tác một lần, chỉ người thực hiện/quản lý. Giao diện Ngân hàng: chọn nhiều câu → "Đổi chuyên đề…/Đổi mức độ…", nút "Hoàn tác", "Xuất Excel".
+- **Mẫu ma trận đề** (mục 7): `GET/POST/DELETE /api/blueprints` (số câu từng phần, tỉ lệ mức độ, chuyên đề, thời gian; riêng tư hoặc dùng chung trong trường; chuyên đề lạ bị loại). **Nhân bản đề** `POST /api/exams/:id/clone` (mã đề mới; câu còn dùng lấy bản mới nhất, câu đã lưu trữ giữ bản đã chụp); nút "Nhân bản đề" trên trang Đề thi.
+- **Giao đề hẹn giờ, nhiều lớp một lúc** (mục 7): đã có từ trước; nay có test: giao nhiều lớp cùng lúc, chặn giao cho lớp người khác dạy, bài chưa tới giờ mở trả "chưa mở" và hiện `upcoming`, tới giờ vào được.
+- Mục 9 (nhật ký, kiểm soát mở lại lượt thi / sửa điểm) đã làm ở nâng cấp 3.
+
+**Chưa làm / hạn chế:** giao diện chưa có màn quản lý mẫu ma trận (API sẵn sàng; trang Ra đề chưa có nút "lưu/dùng mẫu"), chưa có màn xem lịch sử phiên bản; mẫu "đề" hiểu là nhân bản đề + mẫu ma trận (chưa có kho đề mẫu dựng sẵn). Xuất Excel bảng điểm chưa kèm điểm từng phần/từng câu.

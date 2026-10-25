@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { get, post, put } from '../../api';
+import { download, get, post, put } from '../../api';
 import { MathText } from '../../ui/MathText';
 import { ErrorBox, LevelBadge, Loading, Modal, SourceBadge, topicName, TypeBadge, useApp, useAsync } from '../../ui/kit';
 import { Draft, QuestionEditor } from '../../ui/QuestionEditor';
@@ -82,6 +82,33 @@ export function Bank() {
     await post('/api/questions/archive', { ids });
     setSel([]);
     reload();
+  };
+  // Thao tác hàng loạt: đổi chuyên đề / mức độ cho các câu đã chọn; có nút Hoàn tác ngay sau đó.
+  const [lastBulk, setLastBulk] = useState<number | null>(null);
+  const bulk = async (action: 'set_topic' | 'set_level', value: string) => {
+    if (!value) return;
+    setBusy(true);
+    try {
+      const r = await post('/api/questions/bulk', { ids: sel, action, value });
+      setLastBulk(r.batchId);
+      toast(`Đã đổi ${r.changed} câu${r.unchanged ? ` (${r.unchanged} câu không đổi)` : ''}. Bấm Hoàn tác nếu nhầm.`);
+      reload();
+    } catch (e: any) {
+      toast(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const undoBulk = async () => {
+    if (!lastBulk) return;
+    try {
+      const r = await post(`/api/questions/bulk/${lastBulk}/undo`);
+      toast(`Đã hoàn tác ${r.restored} câu${r.skipped.length ? `, bỏ qua ${r.skipped.length} câu đã sửa tiếp` : ''}.`);
+      setLastBulk(null);
+      reload();
+    } catch (e: any) {
+      toast(e.message);
+    }
   };
   const ai = async (kind: 'similar' | 'explain', id: number) => {
     setBusy(true);
@@ -187,6 +214,22 @@ export function Bank() {
               <button className="btn good sm" disabled={busy} onClick={() => approve(sel)}>
                 Duyệt
               </button>
+              <select className="input sm" value="" disabled={busy} onChange={(e) => bulk('set_topic', e.target.value)} aria-label="Đổi chuyên đề cho các câu đã chọn">
+                <option value="">Đổi chuyên đề…</option>
+                {meta.topics.map((t) => (
+                  <option key={t.code} value={t.code}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <select className="input sm" value="" disabled={busy} onChange={(e) => bulk('set_level', e.target.value)} aria-label="Đổi mức độ cho các câu đã chọn">
+                <option value="">Đổi mức độ…</option>
+                {[1, 2, 3].map((l) => (
+                  <option key={l} value={l}>
+                    {meta.levels[l]}
+                  </option>
+                ))}
+              </select>
               <button className="btn danger sm" onClick={() => archive(sel)}>
                 Ẩn
               </button>
@@ -201,6 +244,16 @@ export function Bank() {
           )}
         </div>
       )}
+      <div className="row small">
+        {lastBulk && (
+          <button className="btn sm" onClick={undoBulk}>
+            Hoàn tác thao tác hàng loạt vừa rồi
+          </button>
+        )}
+        <button className="btn ghost sm" onClick={() => download(`/api/questions/export.xlsx?${qs}`, 'ngan-hang-cau-hoi.xlsx').catch((e) => toast(e.message))}>
+          Xuất Excel
+        </button>
+      </div>
       {!meta.aiEnabled && <div className="tiny muted">AI đang tắt: {meta.aiHint}</div>}
       {loading && <Loading />}
       {error && <ErrorBox error={error} onRetry={reload} />}

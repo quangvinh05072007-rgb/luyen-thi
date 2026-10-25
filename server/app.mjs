@@ -11,12 +11,13 @@ import { gradeAttempt, gradeQuestion } from '../shared/grading.mjs';
 import { vnDay, scheduleReview, startOfDayMs, isDue, overdueDays } from '../shared/spaced.mjs';
 import { buildProgress } from '../shared/progress.mjs';
 import crypto from 'node:crypto';
+import { buildXlsx } from '../shared/xlsxWrite.mjs';
 import { hashSeed } from '../shared/rng.mjs';
 import { generateExam, makeVariant, makeVariants, variantLayout, assignVariants, toOriginalResponse, OFFICIAL_BLUEPRINT } from '../shared/generate.mjs';
 import { diagnoseAttempt, diagnoseItem, computeMastery, recommend, selectPractice } from '../shared/diagnose.mjs';
 import { examToDocx, crossAnswerKey } from '../shared/exportExam.mjs';
 import { TOPICS, TOPIC_BY_CODE, LEVELS, SOURCES, SOURCE_HINT, ERROR_TYPES, QUESTION_TYPES } from '../shared/topics.mjs';
-import { CSV_TEMPLATE } from '../shared/sheet.mjs';
+import { CSV_TEMPLATE, SHEET_HEADERS } from '../shared/sheet.mjs';
 import { seedSample } from './seed.mjs';
 import { SAMPLE_QUESTIONS } from './seedQuestions.mjs';
 
@@ -97,6 +98,32 @@ export function createApp(config = {}) {
     const r = String(body?.reason ?? '').trim();
     if (r.length < 5) fail(400, 'Phải nhập lý do (ít nhất 5 ký tự).');
     return r;
+  }
+
+  const VERSION_FIELDS = ['type', 'stem', 'options', 'answer', 'explanation', 'topic', 'level', 'status', 'distractors', 'group_id'];
+  const questionSnapshot = (row) => Object.fromEntries(VERSION_FIELDS.map((k) => [k, row[k] ?? null]));
+  /** Lưu trạng thái TRƯỚC khi sửa, để xem lịch sử và khôi phục. */
+  function recordVersion(row, user, reason) {
+    const n = (db.get('SELECT MAX(version) v FROM question_versions WHERE qid = ?', row.id)?.v ?? 0) + 1;
+    db.run('INSERT INTO question_versions (school_id, qid, version, snapshot_json, changed_by, reason, at) VALUES (?,?,?,?,?,?,?)', row.school_id, row.id, n, JSON.stringify(questionSnapshot(row)), user?.id ?? null, reason ? String(reason).slice(0, 300) : null, now());
+    return n;
+  }
+  function writeQuestionFields(id, f) {
+    db.run(
+      'UPDATE questions SET type = ?, stem = ?, options_json = ?, answer_json = ?, explanation = ?, topic = ?, level = ?, status = ?, distractors_json = ?, group_id = ?, updated_at = ? WHERE id = ?',
+      f.type,
+      f.stem,
+      JSON.stringify(f.options ?? []),
+      JSON.stringify(f.answer ?? null),
+      f.explanation ?? '',
+      f.topic,
+      Number(f.level),
+      f.status,
+      JSON.stringify(f.distractors ?? {}),
+      f.group_id ?? null,
+      now(),
+      id,
+    );
   }
 
   function questionUsed(schoolId, qid) {
@@ -507,6 +534,7 @@ export function createApp(config = {}) {
       const errs = validateQuestion(merged);
       if (errs.length) fail(400, `Câu đã duyệt phải hợp lệ: ${errs.join(' ')}`);
     }
+    recordVersion(q, user, reason ?? body.versionNote ?? 'Sửa câu hỏi');
     db.run(
       'UPDATE questions SET type = ?, stem = ?, options_json = ?, answer_json = ?, explanation = ?, topic = ?, level = ?, distractors_json = ?, group_id = ?, tag_confidence = 1, updated_at = ? WHERE id = ?',
       merged.type,
@@ -647,6 +675,148 @@ export function createApp(config = {}) {
     const qmap = questionsMap(user.school_id, res.items.map((x) => x.qid));
     return { ...res, blueprint: bp, questions: qmap, poolSize: pool.length };
   });
+  // ---- lịch sử phiên bản câu hỏi ----
+  route('GET', '/api/questions/:id/versions', STAFF, ({ user, params }) => {
+    const q = db.get('SELECT id FROM questions WHERE id = ? AND school_id = ?', params.id, user.school_id);
+    if (!q) fail(404, 'Không tìm thấy câu hỏi.');
+    const rows = db.all('SELECT v.version, v.snapshot_json, v.reason, v.at, u.display_name FROM question_versions v LEFT JOIN users u ON u.id = v.changed_by WHERE v.qid = ? ORDER BY v.version DESC', q.id);
+    return { versions: rows.map((r) => ({ version: r.version, at: r.at, by: r.display_name, reason: r.reason, snapshot: r.snapshot })) };
+  });
+  route('POST', '/api/questions/:id/restore', STAFF, ({ user, params, body, ip }) => {
+    const q = db.get('SELECT * FROM questions WHERE id = ?', params.id);
+    if (!q) fail(404, 'Không tìm thấy câu hỏi.');
+    const target = `question:${q.id}`;
+    if (q.school_id !== user.school_id) deny(user, 'question_restore', target, 'Câu hỏi không thuộc trường của bạn.', ip);
+    const v = db.get('SELECT * FROM question_versions WHERE qid = ? AND version = ?', q.id, Number(body.version));
+    if (!v) fail(404, 'Không có phiên bản này.');
+    const snap = v.snapshot;
+    const answerChanged = JSON.stringify(snap.answer ?? null) !== JSON.stringify(q.answer ?? null);
+    const sensitive = answerChanged && questionUsed(user.school_id, q.id);
+    let reason = body.reason ? String(body.reason).trim() : null;
+    if (sensitive) {
+      if (user.role !== 'admin' && q.created_by !== user.id) deny(user, 'question_answer_change', target, 'Chỉ người tạo câu hoặc quản lý mới đổi đáp án câu đã dùng.', ip);
+      reason = needReason(body);
+    }
+    db.tx(() => {
+      recordVersion(q, user, `Trước khi khôi phục phiên bản ${v.version}`);
+      writeQuestionFields(q.id, snap);
+    });
+    audit(user, sensitive ? 'question_answer_change' : 'question_restore', `#${q.id} ← phiên bản ${v.version}`, ip, { target, old: questionSnapshot(q), new: snap, reason });
+    return { ok: true };
+  });
+
+  // ---- thao tác hàng loạt (có hoàn tác) ----
+  const BULK_ACTIONS = ['set_topic', 'set_level', 'archive', 'unarchive'];
+  route('POST', '/api/questions/bulk', STAFF, ({ user, body, ip }) => {
+    const ids = [...new Set((Array.isArray(body.ids) ? body.ids : []).map(Number).filter(Number.isInteger))];
+    if (!ids.length) fail(400, 'Chọn ít nhất một câu.');
+    if (ids.length > 500) fail(400, 'Mỗi lần tối đa 500 câu.');
+    if (!BULK_ACTIONS.includes(body.action)) fail(400, 'Thao tác không hợp lệ.');
+    if (body.action === 'set_topic' && !TOPIC_BY_CODE[body.value]) fail(400, 'Chuyên đề không hợp lệ.');
+    if (body.action === 'set_level' && ![1, 2, 3].includes(Number(body.value))) fail(400, 'Mức độ phải là 1, 2 hoặc 3.');
+    const rows = ids.map((id) => db.get('SELECT * FROM questions WHERE id = ? AND school_id = ?', id, user.school_id)).filter(Boolean);
+    if (rows.length !== ids.length) fail(404, 'Có câu không thuộc ngân hàng của trường.');
+    const foreign = rows.filter((q) => user.role !== 'admin' && q.created_by !== user.id);
+    if (foreign.length) deny(user, `bulk_${body.action}`, foreign.map((q) => `question:${q.id}`).join(','), 'Chỉ người tạo câu hoặc quản lý mới sửa hàng loạt được câu này.', ip);
+    const before = [];
+    db.tx(() => {
+      for (const q of rows) {
+        const next = { ...questionSnapshot(q) };
+        if (body.action === 'set_topic') next.topic = body.value;
+        else if (body.action === 'set_level') next.level = Number(body.value);
+        else if (body.action === 'archive') next.status = 'archived';
+        else if (body.action === 'unarchive') next.status = q.status === 'archived' ? 'draft' : q.status; // phải duyệt lại sau khi khôi phục
+        if (JSON.stringify(next) === JSON.stringify(questionSnapshot(q))) continue;
+        recordVersion(q, user, `Hàng loạt: ${body.action}`);
+        writeQuestionFields(q.id, next);
+        before.push({ id: q.id, snapshot: questionSnapshot(q), ver: db.get('SELECT MAX(version) v FROM question_versions WHERE qid = ?', q.id).v });
+      }
+    });
+    const batchId = Number(db.run('INSERT INTO bulk_ops (school_id, user_id, action, value, before_json, at) VALUES (?,?,?,?,?,?)', user.school_id, user.id, body.action, body.value === undefined ? null : String(body.value), JSON.stringify(before), now()).lastInsertRowid);
+    audit(user, `bulk_${body.action}`, `${before.length}/${ids.length} câu`, ip, { target: `bulk:${batchId}`, new: { action: body.action, value: body.value ?? null, ids: before.map((b) => b.id) } });
+    return { batchId, changed: before.length, unchanged: ids.length - before.length };
+  });
+  route('POST', '/api/questions/bulk/:id/undo', STAFF, ({ user, params, ip }) => {
+    const op = db.get('SELECT * FROM bulk_ops WHERE id = ?', params.id);
+    if (!op) fail(404, 'Không tìm thấy thao tác.');
+    const target = `bulk:${op.id}`;
+    if (op.school_id !== user.school_id) deny(user, 'bulk_undo', target, 'Thao tác không thuộc trường của bạn.', ip);
+    if (op.user_id !== user.id && user.role !== 'admin') deny(user, 'bulk_undo', target, 'Chỉ người thực hiện hoặc quản lý mới hoàn tác được.', ip);
+    if (op.undone_at) fail(400, 'Thao tác này đã được hoàn tác.');
+    let restored = 0;
+    const skipped = [];
+    db.tx(() => {
+      for (const b of op.before) {
+        const cur = db.get('SELECT * FROM questions WHERE id = ?', b.id);
+        if (!cur || (db.get('SELECT MAX(version) v FROM question_versions WHERE qid = ?', b.id).v ?? 0) !== b.ver) {
+          skipped.push(b.id); // câu đã bị sửa tiếp sau thao tác hàng loạt: không ghi đè
+          continue;
+        }
+        recordVersion(cur, user, `Hoàn tác thao tác hàng loạt #${op.id}`);
+        writeQuestionFields(b.id, b.snapshot);
+        restored++;
+      }
+      db.run('UPDATE bulk_ops SET undone_at = ? WHERE id = ?', now(), op.id);
+    });
+    audit(user, 'bulk_undo', `thao tác #${op.id}: khôi phục ${restored}, bỏ qua ${skipped.length}`, ip, { target, new: { restored, skipped } });
+    return { restored, skipped };
+  });
+
+  // ---- mẫu ma trận đề ----
+  const cleanBlueprint = (bp) => {
+    const counts = {};
+    for (const t of ['mcq', 'tf', 'short']) counts[t] = Math.max(0, Math.min(100, Math.floor(Number(bp?.counts?.[t]) || 0)));
+    if (!counts.mcq && !counts.tf && !counts.short) fail(400, 'Mẫu cần có ít nhất một câu.');
+    const levels = {};
+    for (const l of [1, 2, 3]) levels[l] = Math.max(0, Math.min(100, Number(bp?.levels?.[l]) || 0));
+    if (levels[1] + levels[2] + levels[3] <= 0) fail(400, 'Tỉ lệ mức độ không được bằng 0.');
+    const topics = (Array.isArray(bp?.topics) ? bp.topics : []).filter((t) => TOPIC_BY_CODE[t]);
+    return { counts, levels, topics, durationMin: Math.max(5, Math.min(300, Math.floor(Number(bp?.durationMin) || 90))) };
+  };
+  route('GET', '/api/blueprints', STAFF, ({ user }) => ({
+    blueprints: db
+      .all('SELECT b.id, b.name, b.blueprint_json, b.shared, b.owner_id, b.created_at, u.display_name owner FROM blueprint_templates b JOIN users u ON u.id = b.owner_id WHERE b.school_id = ? AND (b.shared = 1 OR b.owner_id = ?) ORDER BY b.created_at DESC', user.school_id, user.id)
+      .map((b) => ({ id: b.id, name: b.name, blueprint: b.blueprint, shared: !!b.shared, owner: b.owner, mine: b.owner_id === user.id })),
+  }));
+  route('POST', '/api/blueprints', STAFF, ({ user, body, ip }) => {
+    const name = String(body.name ?? '').trim().slice(0, 80);
+    if (!name) fail(400, 'Đặt tên cho mẫu.');
+    const blueprint = cleanBlueprint(body.blueprint);
+    const id = Number(db.run('INSERT INTO blueprint_templates (school_id, owner_id, name, blueprint_json, shared, created_at) VALUES (?,?,?,?,?,?)', user.school_id, user.id, name, JSON.stringify(blueprint), body.shared ? 1 : 0, now()).lastInsertRowid);
+    audit(user, 'blueprint_create', name, ip, { target: `blueprint:${id}` });
+    return { id };
+  });
+  route('DELETE', '/api/blueprints/:id', STAFF, ({ user, params, ip }) => {
+    const b = db.get('SELECT * FROM blueprint_templates WHERE id = ?', params.id);
+    if (!b) fail(404, 'Không tìm thấy mẫu.');
+    const target = `blueprint:${b.id}`;
+    if (b.school_id !== user.school_id) deny(user, 'blueprint_delete', target, 'Mẫu không thuộc trường của bạn.', ip);
+    if (b.owner_id !== user.id && user.role !== 'admin') deny(user, 'blueprint_delete', target, 'Chỉ người tạo mẫu hoặc quản lý mới xóa được.', ip);
+    db.run('DELETE FROM blueprint_templates WHERE id = ?', b.id);
+    audit(user, 'blueprint_delete', b.name, ip, { target, old: b.blueprint });
+    return { ok: true };
+  });
+
+  // ---- nhân bản đề ----
+  route('POST', '/api/exams/:id/clone', STAFF, ({ user, params, body, ip }) => {
+    const e = db.get('SELECT * FROM exams WHERE id = ? AND school_id = ?', params.id, user.school_id);
+    if (!e) fail(404, 'Không tìm thấy đề.');
+    // Câu còn dùng được thì lấy bản mới nhất; câu đã bị lưu trữ giữ nguyên bản đã chụp để đề không đổi.
+    const fresh = questionsMap(user.school_id, e.items.map((x) => x.qid));
+    const snapshot = {};
+    for (const it of e.items) snapshot[it.qid] = fresh[it.qid] && fresh[it.qid].status === 'approved' ? fresh[it.qid] : e.snapshot[it.qid];
+    const items = e.items.map((x) => ({ ...x, group: snapshot[x.qid]?.group_id ?? x.group ?? null }));
+    const variants = makeVariants(items, e.variants.length, `${user.id}-${now()}`);
+    const title = String(body.title ?? '').trim() || `${e.title} (bản sao)`;
+    const id = Number(
+      db
+        .run('INSERT INTO exams (school_id, title, blueprint_json, items_json, duration_min, variants_json, snapshot_json, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)', user.school_id, title, JSON.stringify(e.blueprint ?? {}), JSON.stringify(items), e.duration_min, JSON.stringify(variants), JSON.stringify(snapshot), user.id, now())
+        .lastInsertRowid,
+    );
+    audit(user, 'exam_clone', `#${e.id} → #${id}`, ip, { target: `exam:${id}`, old: { from: e.id } });
+    return { id };
+  });
+
   route('POST', '/api/exams', STAFF, ({ user, body, ip }) => {
     const items = Array.isArray(body.items) ? body.items : [];
     if (!items.length) fail(400, 'Đề chưa có câu nào.');
@@ -957,18 +1127,51 @@ export function createApp(config = {}) {
     audit(user, 'assignment_extend', `bài giao #${a.id}`, ip, { target, old: { close_at: a.close_at }, new: { close_at: closeAt }, reason: body.reason });
     return { ok: true, closeAt };
   });
-  route('GET', '/api/assignments/:id/export.csv', STAFF, ({ user, params, ip }) => {
-    const a = db.get('SELECT * FROM assignments WHERE id = ?', params.id);
+  // Bảng điểm một bài giao (dùng chung cho CSV và Excel).
+  const STATUS_VI = { in_progress: 'Đang làm', submitted: 'Đã nộp', auto_submitted: 'Tự nộp khi hết giờ' };
+  function exportableAssignment(user, id, ip) {
+    const a = db.get('SELECT * FROM assignments WHERE id = ?', id);
     if (!a) fail(404, 'Không tìm thấy bài giao.');
     const target = `assignment:${a.id}`;
     if (a.school_id !== user.school_id) deny(user, 'data_export', target, 'Bài giao không thuộc trường của bạn.', ip);
     if (!teacherClassIds(user).includes(a.class_id)) deny(user, 'data_export', target, 'Bạn không phụ trách lớp này.', ip);
     sweepExpired('AND assignment_id = ?', a.id);
-    const rows = db.all("SELECT u.display_name, u.username, t.variant_code, t.status, t.score10 FROM users u LEFT JOIN attempts t ON t.student_id = u.id AND t.assignment_id = ? WHERE u.class_id = ? AND u.role = 'student' AND u.active = 1 ORDER BY u.display_name", a.id, a.class_id);
+    const cls = db.get('SELECT name FROM classes WHERE id = ?', a.class_id);
+    const rows = db.all("SELECT u.display_name, u.username, t.variant_code, t.status, t.score10, t.submitted_at FROM users u LEFT JOIN attempts t ON t.student_id = u.id AND t.assignment_id = ? WHERE u.class_id = ? AND u.role = 'student' AND u.active = 1 ORDER BY u.display_name", a.id, a.class_id);
+    const table = rows.map((r) => {
+      const done = r.status && r.status !== 'in_progress';
+      return [r.display_name, r.username, r.variant_code ?? '', STATUS_VI[r.status] ?? 'Chưa làm', done ? r.score10 : '', done && r.submitted_at ? fmtVn(r.submitted_at) : ''];
+    });
+    return { a, cls, target, table };
+  }
+  const fmtVn = (ms) => new Date(ms + 7 * 3600000).toISOString().slice(0, 16).replace('T', ' ');
+  const SCORE_HEAD = ['Họ tên', 'Tên đăng nhập', 'Mã đề', 'Trạng thái', 'Điểm', 'Nộp lúc'];
+  route('GET', '/api/assignments/:id/export.csv', STAFF, ({ user, params, ip }) => {
+    const { a, table, target } = exportableAssignment(user, params.id, ip);
     const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = '\uFEFF' + ['Họ tên,Tên đăng nhập,Mã đề,Trạng thái,Điểm', ...rows.map((r) => [r.display_name, r.username, r.variant_code, r.status ?? 'chưa làm', r.status && r.status !== 'in_progress' ? r.score10 : ''].map(cell).join(','))].join('\r\n');
-    audit(user, 'data_export', `điểm bài giao #${a.id}: ${rows.length} dòng`, ip, { target });
+    const csv = '\uFEFF' + [SCORE_HEAD.join(','), ...table.map((r) => r.map(cell).join(','))].join('\r\n');
+    audit(user, 'data_export', `điểm bài giao #${a.id} (CSV): ${table.length} dòng`, ip, { target });
     return { __file: { name: `diem-bai-giao-${a.id}.csv`, type: 'text/csv; charset=utf-8', data: Buffer.from(csv, 'utf8') } };
+  });
+  route('GET', '/api/assignments/:id/export.xlsx', STAFF, async ({ user, params, ip }) => {
+    const { a, cls, table, target } = exportableAssignment(user, params.id, ip);
+    const data = await buildXlsx([{ name: `Điểm ${cls.name}`, columns: SCORE_HEAD.map((h, i) => ({ header: h, width: [26, 18, 8, 20, 8, 17][i] })), rows: table }]);
+    audit(user, 'data_export', `điểm bài giao #${a.id} (Excel): ${table.length} dòng`, ip, { target });
+    return { __file: { name: `diem-bai-giao-${a.id}.xlsx`, type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', data } };
+  });
+  // Xuất ngân hàng câu hỏi đúng định dạng mẫu nhập (xuất ra rồi nhập lại được).
+  route('GET', '/api/questions/export.xlsx', STAFF, async ({ user, query, ip }) => {
+    const where = ['school_id = ?', "status != 'archived'"];
+    const p = [user.school_id];
+    if (query.status && query.status !== 'all') (where.push('status = ?'), p.push(query.status));
+    if (query.topic) (where.push('topic = ?'), p.push(query.topic));
+    if (query.type) (where.push('type = ?'), p.push(query.type));
+    const qs = db.all(`SELECT * FROM questions WHERE ${where.join(' AND ')} ORDER BY id LIMIT 5000`, ...p).map(toQuestion);
+    const kind = { mcq: 'TN', tf: 'DS', short: 'TLN' };
+    const rows = qs.map((q) => [kind[q.type], q.stem, ...(q.type === 'short' ? ['', '', '', ''] : q.options), q.type === 'mcq' ? 'ABCD'[q.answer] : q.type === 'tf' ? q.answer.map((x) => (x ? 'Đ' : 'S')).join('') : String(q.answer ?? ''), q.topic ?? '', q.level, q.explanation ?? '']);
+    const data = await buildXlsx([{ name: 'Câu hỏi', columns: SHEET_HEADERS.map((h, i) => ({ header: h, width: [8, 60, 24, 24, 24, 24, 10, 16, 8, 50][i] })), rows }]);
+    audit(user, 'data_export', `ngân hàng câu hỏi (Excel): ${rows.length} câu`, ip, { target: 'questions' });
+    return { __file: { name: 'ngan-hang-cau-hoi.xlsx', type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', data } };
   });
   route('POST', '/api/attempts/:id/accept-late', STAFF, ({ user, params, ip }) => {
     const att = db.get('SELECT * FROM attempts WHERE id = ? AND school_id = ?', params.id, user.school_id);

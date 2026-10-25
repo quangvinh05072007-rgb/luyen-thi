@@ -74,6 +74,19 @@ CREATE TABLE IF NOT EXISTS images (
   cx INTEGER NOT NULL DEFAULT 0, cy INTEGER NOT NULL DEFAULT 0, created_by INTEGER, created_at INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS img_sha ON images(school_id, sha);
+CREATE TABLE IF NOT EXISTS blueprint_templates (
+  id INTEGER PRIMARY KEY, school_id INTEGER NOT NULL, owner_id INTEGER NOT NULL, name TEXT NOT NULL,
+  blueprint_json TEXT NOT NULL, shared INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS question_versions (
+  id INTEGER PRIMARY KEY, school_id INTEGER NOT NULL, qid INTEGER NOT NULL, version INTEGER NOT NULL,
+  snapshot_json TEXT NOT NULL, changed_by INTEGER, reason TEXT, at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS qv_q ON question_versions(qid, version);
+CREATE TABLE IF NOT EXISTS bulk_ops (
+  id INTEGER PRIMARY KEY, school_id INTEGER NOT NULL, user_id INTEGER NOT NULL, action TEXT NOT NULL, value TEXT,
+  before_json TEXT NOT NULL, at INTEGER NOT NULL, undone_at INTEGER
+);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY, school_id INTEGER, user_id INTEGER, action TEXT NOT NULL, detail TEXT, ip TEXT, at INTEGER NOT NULL
 );
