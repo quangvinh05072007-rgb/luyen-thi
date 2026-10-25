@@ -43,30 +43,44 @@ export function ClassView({ id, embedded = false }: { id: number; embedded?: boo
         </a>
       </div>}
       {data.actions.length > 0 && (
-        <div className="card">
-          <h2>Việc nên làm</h2>
-          {data.actions.map((a: any, i: number) => (
-            <div key={i} className="alert info mb small">
-              {a.text}
-            </div>
-          ))}
+        <div className="widget-card">
+          <div className="widget-head">
+            <h2 className="widget-title">
+              <span>💡</span> Việc cần làm cho lớp
+            </h2>
+            <span className="badge blue">{data.actions.length} đề xuất</span>
+          </div>
+          <div className="stack" style={{ gap: 8 }}>
+            {data.actions.map((a: any, i: number) => (
+              <div key={i} className="task-widget" style={{ padding: '10px 14px' }}>
+                <span style={{ fontSize: 16 }}>📌</span>
+                <span className="small grow" style={{ fontWeight: 500 }}>{a.text}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {weak.data?.groups?.length > 0 && (
-        <div className="card">
-          <h2>Nhóm cần hỗ trợ</h2>
-          <p className="small muted">Học sinh có năng lực dưới 50% ở chuyên đề (đã làm ít nhất 3 câu). Giao một phiếu luyện đúng chuyên đề cho riêng nhóm đó.</p>
-          {weak.data.groups.slice(0, 6).map((g: any) => (
-            <div key={g.topic} className="list-item">
-              <div className="grow">
-                <div className="strong small">{g.name}</div>
-                <div className="tiny muted">{g.students.map((s: any) => `${s.name} (${Math.round(s.value * 100)}%)`).join(', ')}</div>
+        <div className="widget-card">
+          <div className="widget-head">
+            <h2 className="widget-title">
+              <span>⚠️</span> Nhóm học sinh cần hỗ trợ
+            </h2>
+            <span className="badge amber">{weak.data.groups.length} nhóm</span>
+          </div>
+          <div className="stack" style={{ gap: 8 }}>
+            {weak.data.groups.slice(0, 6).map((g: any) => (
+              <div key={g.topic} className="task-widget" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 200px' }}>
+                  <div className="strong small" style={{ color: '#111827' }}>{g.name}</div>
+                  <div className="tiny muted">{g.students.map((s: any) => `${s.name} (${Math.round(s.value * 100)}%)`).join(', ')}</div>
+                </div>
+                <button className="btn sm primary" disabled={assigning === g.topic} onClick={() => assignPractice(g.topic, g.name, g.students.length)}>
+                  Giao phiếu luyện ({g.students.length} em)
+                </button>
               </div>
-              <button className="btn sm" disabled={assigning === g.topic} onClick={() => assignPractice(g.topic, g.name, g.students.length)}>
-                Giao phiếu luyện ({g.students.length} em)
-              </button>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
       <div className="card">

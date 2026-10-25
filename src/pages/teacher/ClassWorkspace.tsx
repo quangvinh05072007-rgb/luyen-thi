@@ -36,20 +36,22 @@ export function ClassWorkspace({ id, tab = 'students', assignmentId }: { id: num
   );
   return (
     <div className="stack">
-      <header className="row between">
-        <div>
-          <a className="small" href="#/lop-hoc">
-            Lớp học
-          </a>
-          <h1>Lớp {data.class.name}</h1>
-          <p className="small muted">
-            Khối {data.class.grade} · {data.students.length} học sinh
-          </p>
-        </div>
-        <a className="btn primary" href={`#/thu-vien?classId=${id}`}>
-          Giao bài
+      <div>
+        <a className="small muted" href="#/lop-hoc" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+          ← Danh sách lớp
         </a>
-      </header>
+        <header className="row between wrap" style={{ gap: 12 }}>
+          <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+            <h1 style={{ margin: 0 }}>Lớp {data.class.name}</h1>
+            <span className="badge blue">Khối {data.class.grade}</span>
+            <span className="badge">👥 {data.students.length} học sinh</span>
+          </div>
+          <a className="btn primary" href={`#/thu-vien?classId=${id}`}>
+            + Giao bài cho lớp
+          </a>
+        </header>
+      </div>
+
       <nav className="section-tabs" aria-label="Các mục trong lớp">
         {tabs.map(([value, label, path]) => (
           <a key={value} href={`#${path}`} aria-current={tab === value ? 'page' : undefined} className={tab === value ? 'active' : ''}>
@@ -57,41 +59,49 @@ export function ClassWorkspace({ id, tab = 'students', assignmentId }: { id: num
           </a>
         ))}
       </nav>
+
       {tab === 'students' && (
-        <>
-          <label className="field">
-            Tìm học sinh
-            <input
-              type="search"
-              className="input"
-              placeholder="Họ tên hoặc tên đăng nhập"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </label>
-          <div className="card">
-            <div className="card-head">
-              <h2>Danh sách học sinh</h2>
+        <div className="stack">
+          <div className="card flat row between" style={{ padding: '10px 14px', gap: 10, flexWrap: 'wrap' }}>
+            <span className="small muted" style={{ fontWeight: 600 }}>
+              Sĩ số: {students.length} / {data.students.length} học sinh
+            </span>
+            <div style={{ flex: '1 1 220px', maxWidth: 320 }}>
+              <input
+                type="search"
+                className="input"
+                placeholder="Tìm họ tên hoặc tên đăng nhập…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
+          </div>
+
+          <div className="grid-2">
             {students.map((s: any) => (
-              <a className="list-item" key={s.id} href={`#/hoc-sinh/${s.id}`}>
-                <span className="student-avatar" aria-hidden="true">
-                  {s.display_name.trim().split(/\s+/).slice(-1)[0].slice(0, 1)}
-                </span>
-                <div className="grow">
-                  <strong>{s.display_name}</strong>
-                  <div className="tiny muted">{s.username}</div>
+              <a className="class-widget-card" key={s.id} href={`#/hoc-sinh/${s.id}`}>
+                <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+                  <span className="student-avatar" aria-hidden="true">
+                    {s.display_name.trim().split(/\s+/).slice(-1)[0].slice(0, 1)}
+                  </span>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#111827' }}>{s.display_name}</div>
+                    <div className="tiny muted">{s.username}</div>
+                  </div>
                 </div>
-                <span className="small">Hồ sơ</span>
+                <span className="btn sm ghost" style={{ pointerEvents: 'none' }}>
+                  Hồ sơ →
+                </span>
               </a>
             ))}
-            {students.length === 0 && (
-              <p className="muted">
-                {data.students.length ? 'Không có học sinh khớp tên tìm kiếm.' : 'Lớp chưa có học sinh. Quản lý trường có thể thêm ở mục tài khoản.'}
-              </p>
-            )}
           </div>
-        </>
+
+          {students.length === 0 && (
+            <div className="card empty">
+              {data.students.length ? 'Không có học sinh khớp tìm kiếm.' : 'Lớp chưa có học sinh.'}
+            </div>
+          )}
+        </div>
       )}
       {tab === 'work' && <Assignments classId={id} results={false} />}
       {tab === 'results' &&
@@ -124,25 +134,38 @@ export function ClassWorkspace({ id, tab = 'students', assignmentId }: { id: num
         ))}
       {tab === 'settings' && (
         <section className="card stack">
-          <h2>Thông tin lớp</h2>
-          <dl className="class-info">
-            <dt>Tên lớp</dt>
-            <dd>{data.class.name}</dd>
-            <dt>Khối</dt>
-            <dd>{data.class.grade}</dd>
-            <dt>Học sinh đang hoạt động</dt>
-            <dd>{data.students.length}</dd>
-          </dl>
-          <p className="small muted">
-            {user.role === 'admin'
-              ? 'Quản lý tài khoản học sinh và phân công giáo viên trong trang Người dùng.'
-              : 'Danh sách học sinh và phân công lớp do quản lý trường cập nhật. Mở hồ sơ từng em để cấp mã liên kết phụ huynh.'}
-          </p>
-          {user.role === 'admin' && (
+          <div className="card-head">
+            <h2>Thông tin lớp học</h2>
+          </div>
+          <div className="stat-widget-grid">
+            <div className="stat-widget">
+              <div className="stat-widget-info">
+                <span className="stat-widget-label">Tên lớp</span>
+                <span className="stat-widget-num" style={{ fontSize: 20 }}>{data.class.name}</span>
+              </div>
+            </div>
+            <div className="stat-widget">
+              <div className="stat-widget-info">
+                <span className="stat-widget-label">Khối</span>
+                <span className="stat-widget-num" style={{ fontSize: 20 }}>Khối {data.class.grade}</span>
+              </div>
+            </div>
+            <div className="stat-widget">
+              <div className="stat-widget-info">
+                <span className="stat-widget-label">Sĩ số</span>
+                <span className="stat-widget-num" style={{ fontSize: 20 }}>{data.students.length}</span>
+              </div>
+            </div>
+          </div>
+          {user.role === 'admin' ? (
             <div>
-              <a className="btn" href="#/nguoi-dung">
+              <a className="btn primary" href="#/nguoi-dung">
                 Quản lý tài khoản và phân công
               </a>
+            </div>
+          ) : (
+            <div className="row small muted">
+              <span>Hồ sơ từng học sinh có mã liên kết phụ huynh. Phân công lớp do quản trị viên quản lý.</span>
             </div>
           )}
         </section>

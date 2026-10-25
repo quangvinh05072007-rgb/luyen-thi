@@ -10,35 +10,142 @@ export function Classes() {
   const [search, setSearch] = useState('');
   const [grade, setGrade] = useState('');
   const classes = data?.classes ?? [];
-  const filtered = classes.filter(c => (!grade || c.grade === Number(grade)) && `${c.name} ${c.teacher ?? ''}`.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi')));
-  return <div className="stack">
-    <div className="row between">
-      <div><h1>Lớp học</h1><p className="small muted">{user.role === 'admin' ? 'Các lớp trong trường. Mở một lớp để xem học sinh, năng lực và bài đã giao.' : 'Các lớp bạn phụ trách. Mở lớp để xem học sinh, kết quả và giao phiếu luyện.'}</p></div>
-      {user.role === 'admin' && <a className="btn" href="#/nguoi-dung">Quản lý lớp và tài khoản</a>}
-    </div>
-    {loading && <Loading text="Đang tải lớp học…" />}
-    {error && <ErrorBox error={error} onRetry={reload} />}
-    {data && <>
-      <div className="row small muted"><span>{classes.length} lớp</span><span>{classes.reduce((sum,c) => sum + c.students,0)} học sinh</span></div>
-      {classes.length > 0 ? <>
-        <div className="card flat row">
-          <label className="field grow">Tìm lớp<input className="input" type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên lớp hoặc giáo viên" /></label>
-          <label className="field">Khối<select className="input" value={grade} onChange={e => setGrade(e.target.value)}><option value="">Tất cả khối</option>{[10,11,12].map(g => <option key={g} value={g}>Khối {g}</option>)}</select></label>
+  const filtered = classes.filter(
+    (c) =>
+      (!grade || c.grade === Number(grade)) &&
+      `${c.name} ${c.teacher ?? ''}`.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi'))
+  );
+  const totalStudents = classes.reduce((sum, c) => sum + c.students, 0);
+
+  return (
+    <div className="stack">
+      <div className="row between">
+        <div>
+          <h1 style={{ margin: 0 }}>Lớp học</h1>
         </div>
-        {filtered.length === 0 ? <div className="card empty">Không có lớp khớp bộ lọc. Thử đổi tên hoặc khối.</div> : <div className="grid-2">
-          {filtered.map(c => <a className="card class-link" href={`#/lop/${c.id}`} key={c.id}>
-            <div className="row between">
-              <h2 style={{ color: '#111827', margin: 0 }}>Lớp {c.name}</h2>
-              <span className="badge blue">Khối {c.grade}</span>
+        {user.role === 'admin' && (
+          <a className="btn" href="#/nguoi-dung">
+            <Icon name="gear" /> Quản lý lớp & tài khoản
+          </a>
+        )}
+      </div>
+
+      {loading && <Loading text="Đang tải lớp học…" />}
+      {error && <ErrorBox error={error} onRetry={reload} />}
+
+      {data && (
+        <>
+          <div className="stat-widget-grid">
+            <div className="stat-widget">
+              <div className="stat-widget-icon blue">
+                <Icon name="class" />
+              </div>
+              <div className="stat-widget-info">
+                <span className="stat-widget-num">{classes.length}</span>
+                <span className="stat-widget-label">Lớp học</span>
+              </div>
             </div>
-            <p className="small muted" style={{ margin: '8px 0' }}>{c.students} học sinh · {c.teacher ?? 'Chưa gán giáo viên'}</p>
-            <div className="row between small mt" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
-              <span className="row" style={{ gap: 6, color: 'var(--ink-2)' }}><Icon name="class" /> Quản lý học sinh & bài giao</span>
-              <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Vào lớp →</span>
+            <div className="stat-widget">
+              <div className="stat-widget-icon green">
+                <Icon name="book" />
+              </div>
+              <div className="stat-widget-info">
+                <span className="stat-widget-num">{totalStudents}</span>
+                <span className="stat-widget-label">Học sinh</span>
+              </div>
             </div>
-          </a>)}
-        </div>}
-      </> : <div className="card empty"><h2>Chưa có lớp học</h2><p>{user.role === 'admin' ? 'Vào Quản lý lớp và tài khoản để tạo lớp, thêm học sinh và gán giáo viên.' : 'Nhờ quản lý trường gán lớp phụ trách cho tài khoản của bạn.'}</p></div>}
-    </>}
-  </div>;
+            <div className="stat-widget">
+              <div className="stat-widget-icon orange">
+                <Icon name="flag" />
+              </div>
+              <div className="stat-widget-info">
+                <span className="stat-widget-num">
+                  {[...new Set(classes.map((c) => c.grade))].length}
+                </span>
+                <span className="stat-widget-label">Khối lớp</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="card flat row between" style={{ padding: '12px 16px', gap: 12, flexWrap: 'wrap' }}>
+            <div className="filter-pills">
+              <button
+                type="button"
+                className={`filter-pill ${!grade ? 'active' : ''}`}
+                onClick={() => setGrade('')}
+              >
+                Tất cả khối
+              </button>
+              {[10, 11, 12].map((g) => (
+                <button
+                  type="button"
+                  key={g}
+                  className={`filter-pill ${grade === String(g) ? 'active' : ''}`}
+                  onClick={() => setGrade(grade === String(g) ? '' : String(g))}
+                >
+                  Khối {g}
+                </button>
+              ))}
+            </div>
+            <div style={{ flex: '1 1 240px', maxWidth: 360 }}>
+              <input
+                className="input"
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Tìm tên lớp hoặc giáo viên…"
+              />
+            </div>
+          </div>
+
+          {classes.length > 0 ? (
+            filtered.length === 0 ? (
+              <div className="card empty">Không tìm thấy lớp học phù hợp.</div>
+            ) : (
+              <div className="class-tile-grid">
+                {filtered.map((c) => (
+                  <div className="class-tile-widget" key={c.id}>
+                    <div className="class-tile-head">
+                      <h2 className="class-tile-name">
+                        <Icon name="class" /> Lớp {c.name}
+                      </h2>
+                      <span className="badge blue">Khối {c.grade}</span>
+                    </div>
+                    <div className="class-tile-chips">
+                      <span className="class-tile-chip">
+                        👥 {c.students} học sinh
+                      </span>
+                      <span className="class-tile-chip">
+                        👤 {c.teacher ?? 'Chưa gán GV'}
+                      </span>
+                    </div>
+                    <div className="class-tile-actions">
+                      <a className="btn primary sm grow" href={`#/lop/${c.id}`}>
+                        Vào lớp
+                      </a>
+                      <a className="btn sm" href={`#/thu-vien?classId=${c.id}`} title="Giao bài cho lớp">
+                        Giao đề
+                      </a>
+                      <a className="btn sm" href={`#/lop/${c.id}/ket-qua`} title="Bảng điểm lớp">
+                        Điểm
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : (
+            <div className="card empty">
+              <h2>Chưa có lớp học</h2>
+              <p>
+                {user.role === 'admin'
+                  ? 'Vào Quản lý lớp và tài khoản để tạo lớp mới.'
+                  : 'Liên hệ quản lý trường để được phân công lớp.'}
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 }

@@ -103,20 +103,97 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .mb { margin-bottom: 16px; }
 .hr { height: 1px; background: var(--line); margin: 16px 0; }
 
-/* ---------- lưới ứng dụng kiểu Azota (App Tiles Grid) ---------- */
-.azota-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-bottom: 20px; }
-.azota-tile { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); color: var(--ink); text-decoration: none; cursor: pointer; }
-.azota-tile:hover { transform: translateY(-2px); border-color: var(--primary); box-shadow: 0 8px 20px rgba(22, 119, 255, 0.12); text-decoration: none; }
-.azota-tile-icon { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0; color: #fff; }
-.azota-tile-icon svg { width: 24px; height: 24px; }
-.azota-tile-icon.blue { background: linear-gradient(135deg, #1677ff 0%, #0958d9 100%); }
-.azota-tile-icon.orange { background: linear-gradient(135deg, #fa8c16 0%, #d46b08 100%); }
-.azota-tile-icon.purple { background: linear-gradient(135deg, #722ed1 0%, #531dab 100%); }
-.azota-tile-icon.teal { background: linear-gradient(135deg, #13c2c2 0%, #08979c 100%); }
-.azota-tile-icon.cyan { background: linear-gradient(135deg, #2f54eb 0%, #1d39c4 100%); }
-.azota-tile-icon.rose { background: linear-gradient(135deg, #eb2f96 0%, #c41d7f 100%); }
-.azota-tile-title { font-size: 15px; font-weight: 700; color: #111827; margin-bottom: 2px; }
-.azota-tile-desc { font-size: 12px; color: var(--ink-3); line-height: 1.35; }
+/* ---------- HỆ THỐNG WIDGET (AZOTA WIDGET DASHBOARD) ---------- */
+.widget-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+.widget-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 10px; }
+.widget-title { font-size: 15px; font-weight: 700; color: #111827; margin: 0; display: flex; align-items: center; gap: 8px; }
+.widget-title svg { width: 18px; height: 18px; color: var(--primary); }
+
+/* Thẻ thống kê số liệu (Stat Widgets) */
+.stat-widget-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+@media (max-width: 900px) { .stat-widget-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .stat-widget-grid { grid-template-columns: 1fr; } }
+
+.stat-widget { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: flex; align-items: center; gap: 14px; box-shadow: var(--shadow); transition: all 0.2s ease; text-decoration: none; color: inherit; }
+.stat-widget:hover { transform: translateY(-2px); border-color: var(--primary); box-shadow: 0 6px 18px rgba(22, 119, 255, 0.1); text-decoration: none; }
+.stat-widget-icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0; }
+.stat-widget-icon svg { width: 22px; height: 22px; }
+.stat-widget-icon.blue { background: #e6f4ff; color: #1677ff; }
+.stat-widget-icon.orange { background: #fff7e6; color: #fa8c16; }
+.stat-widget-icon.green { background: #f6ffed; color: #52c41a; }
+.stat-widget-icon.purple { background: #f9f0ff; color: #722ed1; }
+
+.stat-widget-info { display: flex; flex-direction: column; min-width: 0; }
+.stat-widget-num { font-size: 24px; font-weight: 800; color: #111827; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat-widget-label { font-size: 13px; color: var(--ink-3); font-weight: 500; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Thẻ thao tác nhanh kiểu Azota (App Launchers) */
+.launcher-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px; }
+@media (max-width: 1024px) { .launcher-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 600px) { .launcher-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.launcher-widget { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 12px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; text-decoration: none; color: var(--ink); box-shadow: var(--shadow); transition: all 0.2s ease; cursor: pointer; }
+.launcher-widget:hover { transform: translateY(-2px); border-color: var(--primary); background: #f0f7ff; box-shadow: 0 6px 18px rgba(22, 119, 255, 0.12); text-decoration: none; }
+.launcher-icon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; color: #fff; flex-shrink: 0; }
+.launcher-icon svg { width: 22px; height: 22px; }
+.launcher-icon.blue { background: linear-gradient(135deg, #1677ff 0%, #0958d9 100%); }
+.launcher-icon.purple { background: linear-gradient(135deg, #722ed1 0%, #531dab 100%); }
+.launcher-icon.orange { background: linear-gradient(135deg, #fa8c16 0%, #d46b08 100%); }
+.launcher-icon.teal { background: linear-gradient(135deg, #13c2c2 0%, #08979c 100%); }
+.launcher-icon.cyan { background: linear-gradient(135deg, #2f54eb 0%, #1d39c4 100%); }
+.launcher-icon.rose { background: linear-gradient(135deg, #eb2f96 0%, #c41d7f 100%); }
+.launcher-label { font-size: 13px; font-weight: 700; color: #111827; white-space: nowrap; }
+.launcher-tag { font-size: 11px; color: var(--primary); font-weight: 600; background: var(--primary-soft); padding: 1px 7px; border-radius: 99px; }
+
+/* Thẻ nhiệm vụ & bài thi dạng widget */
+.task-widget { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; transition: all 0.15s ease; text-decoration: none; color: inherit; }
+.task-widget:hover { background: #f0f7ff; border-color: #bae0ff; text-decoration: none; }
+.task-widget-title { font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 2px; }
+.task-widget-sub { font-size: 12px; color: var(--ink-3); }
+
+/* Thẻ nhiệm vụ của học sinh kiểu Hero Widget */
+.student-mission-widget { background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border: 1.5px solid #bae0ff; border-radius: 16px; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: 0 4px 16px rgba(22, 119, 255, 0.08); flex-wrap: wrap; }
+.student-mission-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #1677ff; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.student-mission-title { font-size: 19px; font-weight: 800; color: #111827; margin-bottom: 4px; }
+
+/* Lưới thẻ học sinh / lớp học compact */
+.class-widget-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; text-decoration: none; color: inherit; transition: all 0.15s ease; }
+.class-widget-card:hover { border-color: var(--primary); background: #f0f7ff; text-decoration: none; }
+
+/* Thẻ lớp học kiểu Azota Tile Widget */
+.class-tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.class-tile-widget { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); border-top: 4px solid var(--primary); text-decoration: none; color: inherit; }
+.class-tile-widget:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(22, 119, 255, 0.12); border-color: var(--primary); }
+.class-tile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.class-tile-name { font-size: 17px; font-weight: 800; color: #111827; margin: 0; display: flex; align-items: center; gap: 8px; }
+.class-tile-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.class-tile-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-2); background: var(--surface-2); padding: 3px 8px; border-radius: 6px; font-weight: 500; }
+.class-tile-actions { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); }
+
+/* Thẻ đề thi kiểu Azota Exam Card */
+.exam-widget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.exam-widget-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); position: relative; }
+.exam-widget-card:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(22, 119, 255, 0.1); border-color: var(--primary); }
+.exam-widget-title { font-size: 15px; font-weight: 700; color: #111827; line-height: 1.35; margin: 0; }
+.exam-widget-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.exam-widget-chip { font-size: 12px; color: var(--ink-3); background: var(--surface-2); padding: 2px 7px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; }
+.exam-widget-actions { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); }
+
+/* Thẻ kết quả bài làm kiểu Azota Result Card */
+.result-widget-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 14px; box-shadow: var(--shadow); transition: all 0.15s ease; text-decoration: none; color: inherit; }
+.result-widget-card:hover { border-color: var(--primary); background: #f0f7ff; text-decoration: none; }
+.result-score-badge { width: 52px; height: 52px; border-radius: 12px; display: grid; place-items: center; font-size: 19px; font-weight: 800; flex-shrink: 0; color: #fff; }
+.result-score-badge.high { background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); }
+.result-score-badge.med { background: linear-gradient(135deg, #1677ff 0%, #0958d9 100%); }
+.result-score-badge.avg { background: linear-gradient(135deg, #fa8c16 0%, #d46b08 100%); }
+.result-score-badge.low { background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%); }
+.result-score-badge.pending { background: #d9d9d9; color: var(--ink-3); font-size: 13px; font-weight: 600; text-align: center; line-height: 1.1; }
+
+/* Filter pills */
+.filter-pills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.filter-pill { border: 1px solid var(--line); background: var(--surface); padding: 5px 12px; border-radius: 99px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--ink-2); transition: all 0.15s ease; }
+.filter-pill:hover { border-color: var(--primary); color: var(--primary); }
+.filter-pill.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
 
 /* ---------- nút bấm kiểu Azota ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 9px 18px; border-radius: var(--radius-sm); font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; min-height: 40px; text-decoration: none; }

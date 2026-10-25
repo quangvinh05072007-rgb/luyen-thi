@@ -22,40 +22,39 @@ export function Login({onLogin}:{onLogin:(u:User)=>void}) {
   };
   return <div className="login-wrap"><div className={`login-card ${role?'':'role-picker'}`}>
     <div className="center mb" style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-      <AzotaLogo size={56}/>
-      <h1 style={{marginTop:12,marginBottom:4}}>SmartExam</h1>
-      <p className="muted" style={{fontSize:14}}>Nền tảng kiểm tra, đánh giá & cá nhân hóa Toán THPT</p>
+      <AzotaLogo size={54}/>
+      <h1 style={{marginTop:10,marginBottom:2,fontSize:26}}>SmartExam</h1>
+      <p className="tiny muted">Nền tảng thi & kiểm tra trực tuyến</p>
     </div>
     {!role ? <>
-      <h2 className="center" style={{fontSize:17,color:'var(--ink-2)'}}>Bạn là học sinh hay giáo viên?</h2>
       <div className="role-options">
         <button className="role-option" onClick={()=>choose('student')}>
           <span className="role-symbol student"><Icon name="book"/></span>
-          <strong>Tôi là học sinh</strong>
-          <span>Vào lớp, làm bài thi và luyện tập</span>
+          <strong>Học sinh</strong>
+          <span>Vào thi & luyện tập</span>
         </button>
         <button className="role-option" onClick={()=>choose('teacher')}>
           <span className="role-symbol teacher"><Icon name="class"/></span>
-          <strong>Tôi là giáo viên</strong>
-          <span>Quản lý lớp, tạo đề và xem kết quả</span>
+          <strong>Giáo viên</strong>
+          <span>Quản lý lớp & tạo đề</span>
         </button>
       </div>
       <div className="row role-secondary">
-        <a href="#/phu-huynh" className="small" style={{fontWeight:600}}>Cổng phụ huynh tra cứu</a>
+        <a href="#/phu-huynh" className="small" style={{fontWeight:600}}>Tra cứu phụ huynh</a>
         <button className="btn ghost sm" onClick={()=>choose('admin')}>Quản lý trường</button>
       </div>
     </> : <>
       <form className="card stack" onSubmit={submit}>
         <div className="row between">
-          <h2 style={{margin:0}}>Đăng nhập {LABELS[role].toLocaleLowerCase('vi')}</h2>
+          <h2 style={{margin:0,fontSize:17}}>Đăng nhập {LABELS[role]}</h2>
           <button className="btn ghost sm" type="button" disabled={busy} onClick={()=>choose(null)}>Đổi vai trò</button>
         </div>
-        <label className="field">Tên đăng nhập<input className="input" autoComplete="username" value={username} onChange={e=>setU(e.target.value)} autoFocus required placeholder="Nhập tên đăng nhập"/></label>
-        <label className="field">Mật khẩu<input className="input" type="password" autoComplete="current-password" value={password} onChange={e=>setP(e.target.value)} required placeholder="Nhập mật khẩu"/></label>
+        <label className="field">Tên đăng nhập<input className="input" autoComplete="username" value={username} onChange={e=>setU(e.target.value)} autoFocus required placeholder="Tên đăng nhập"/></label>
+        <label className="field">Mật khẩu<input className="input" type="password" autoComplete="current-password" value={password} onChange={e=>setP(e.target.value)} required placeholder="Mật khẩu"/></label>
         {error&&<div className="alert error" role="alert">{error}</div>}
         <button className="btn primary big block" disabled={busy||!username||!password}>{busy?'Đang đăng nhập…':'Đăng nhập'}</button>
       </form>
-      {sample&&<div className="card flat mt demo-accounts"><div className="row between mb"><h3 style={{margin:0}}>Dùng thử {LABELS[role].toLocaleLowerCase('vi')}</h3><span className="badge amber">Dữ liệu mẫu</span></div><p className="small muted">Mật khẩu mẫu: <span className="kbd">demo1234</span></p>{DEMO.filter(d=>d.role===role).map(d=><button key={d.u} className="btn block" disabled={busy} onClick={()=>submit(undefined,d.u,'demo1234')}>{d.who}</button>)}</div>}
+      {sample&&<div className="card flat mt demo-accounts"><div className="row between mb"><h3 style={{margin:0,fontSize:14}}>Tài khoản dùng thử ({LABELS[role]})</h3><span className="badge amber">Mẫu</span></div><p className="tiny muted">Mật khẩu: <span className="kbd">demo1234</span></p>{DEMO.filter(d=>d.role===role).map(d=><button key={d.u} className="btn block" disabled={busy} onClick={()=>submit(undefined,d.u,'demo1234')}>{d.who}</button>)}</div>}
     </>}
   </div></div>;
 }

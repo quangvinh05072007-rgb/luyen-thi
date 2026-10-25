@@ -97,20 +97,28 @@ export function Report({ id, classId }: { id: number; classId?: number }) {
           </button>
         </div>
       </div>
-      <div className="grid-4">
-        <div className="card stat">
-          <span className="v" style={{ color: scoreColor(s.avg) }}>{fmtScore(s.avg)}</span>
-          <span className="k">Điểm trung bình</span>
+      <div className="stat-widget-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        <div className="stat-widget">
+          <div className="stat-widget-icon blue">
+            <span style={{ fontSize: 20 }}>📊</span>
+          </div>
+          <div className="stat-widget-info">
+            <span className="stat-widget-num" style={{ color: scoreColor(s.avg) }}>{fmtScore(s.avg)}</span>
+            <span className="stat-widget-label">Điểm trung bình</span>
+          </div>
         </div>
-        <div className="card stat">
-          <span className="v">
-            {s.submitted}/{s.students}
-          </span>
-          <span className="k">Đã nộp{s.doing ? ` · ${s.doing} đang làm` : ''}</span>
+        <div className="stat-widget">
+          <div className="stat-widget-icon green">
+            <span style={{ fontSize: 20 }}>📝</span>
+          </div>
+          <div className="stat-widget-info">
+            <span className="stat-widget-num">{s.submitted}/{s.students}</span>
+            <span className="stat-widget-label">Đã nộp{s.doing ? ` · ${s.doing} đang làm` : ''}</span>
+          </div>
         </div>
-        <div className="card">
-          <div className="k small muted">Phổ điểm</div>
-          <div className="hist mt">
+        <div className="widget-card" style={{ padding: 14 }}>
+          <div className="widget-title" style={{ fontSize: 13, marginBottom: 8 }}>Phổ điểm</div>
+          <div className="hist">
             {s.hist.map((n: number, i: number) => (
               <div key={i} style={{ height: `${(n / maxH) * 100}%`, background: i < 5 ? 'var(--bad)' : i < 7 ? 'var(--accent)' : 'var(--good)' }} title={`${i} điểm: ${n} em`} />
             ))}
@@ -121,10 +129,11 @@ export function Report({ id, classId }: { id: number; classId?: number }) {
             ))}
           </div>
         </div>
-        <div className="card">
-          <div className="k small muted mb">Kiểu lỗi cả lớp</div>
+        <div className="widget-card" style={{ padding: 14 }}>
+          <div className="widget-title" style={{ fontSize: 13, marginBottom: 8 }}>Kiểu lỗi phổ biến</div>
           {Object.entries(data.errorCount as Record<string, number>)
             .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
             .map(([k, n]) => (
               <div key={k} className="row between tiny" style={{ marginBottom: 4 }}>
                 <ErrorTypeBadge type={k} />

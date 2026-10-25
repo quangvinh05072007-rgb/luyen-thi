@@ -11,53 +11,81 @@ function ProgressNumbers({ p }: { p: any }) {
   const g = p.weeklyGoal;
   return (
     <>
-      <div className="grid-3">
-        <div className="card stat">
-          <span className="v">{p.streak.current}</span>
-          <span className="k">Ngày học liên tiếp (dài nhất {p.streak.longest}){p.streak.activeToday ? '' : ' · hôm nay chưa học'}</span>
+      <div className="stat-widget-grid">
+        <div className="stat-widget">
+          <div className="stat-widget-icon orange">
+            <span style={{ fontSize: 20 }}>🔥</span>
+          </div>
+          <div className="stat-widget-info">
+            <span className="stat-widget-num">{p.streak.current}</span>
+            <span className="stat-widget-label">
+              Chuỗi ngày (dài nhất {p.streak.longest})
+            </span>
+          </div>
         </div>
-        <div className="card stat">
-          <span className="v">{p.reviewDue}</span>
-          <span className="k">Câu đến hạn ôn hôm nay</span>
+        <div className="stat-widget">
+          <div className="stat-widget-icon red" style={{ background: '#fff1f0', color: '#ff4d4f' }}>
+            <span style={{ fontSize: 20 }}>📑</span>
+          </div>
+          <div className="stat-widget-info">
+            <span className="stat-widget-num">{p.reviewDue}</span>
+            <span className="stat-widget-label">Câu đến hạn ôn</span>
+          </div>
         </div>
-        <div className="card stat">
-          <span className="v">
-            {g.done}/{g.target}
-          </span>
-          <span className="k">Mục tiêu tuần ({dm(g.weekStart)}–{dm(g.weekEnd)}){g.met ? ' · đã đạt' : ` · còn ${g.remaining} câu`}</span>
+        <div className="stat-widget">
+          <div className="stat-widget-icon blue">
+            <span style={{ fontSize: 20 }}>🎯</span>
+          </div>
+          <div className="stat-widget-info">
+            <span className="stat-widget-num">
+              {g.done}/{g.target}
+            </span>
+            <span className="stat-widget-label">
+              Mục tiêu tuần {g.met ? '· Đạt' : `· Còn ${g.remaining}`}
+            </span>
+          </div>
         </div>
       </div>
       <div className="grid-2">
-        <div className="card">
-          <h2>Năng lực theo chuyên đề</h2>
-          {p.topics.length === 0 && <p className="muted small">Chưa có dữ liệu. Làm vài câu để SmartExam hiểu em.</p>}
+        <div className="widget-card">
+          <div className="widget-head">
+            <h2 className="widget-title">
+              <span>📊</span> Năng lực theo chuyên đề
+            </h2>
+          </div>
+          {p.topics.length === 0 && <p className="muted small">Chưa có dữ liệu.</p>}
           {p.topics.map((t: any) => (
             <div key={t.topic} className="mb">
               <div className="row between small">
-                <span>{t.name}</span>
+                <span style={{ fontWeight: 600 }}>{t.name}</span>
                 <span className="muted">
-                  {t.insufficientData ? `Chưa đủ dữ liệu · ${t.n}/${p.minEvidence} câu` : `${pct(t.value)} · ${BAND[t.band]} · ${t.n} câu`}
+                  {t.insufficientData ? `Cần thêm dữ liệu (${t.n}/${p.minEvidence})` : `${pct(t.value)} · ${BAND[t.band]}`}
                 </span>
               </div>
               {!t.insufficientData && <Bar value={t.value} />}
             </div>
           ))}
-          <p className="tiny muted">Tính từ kết quả gần đây; câu làm gần đây có trọng số lớn hơn.</p>
         </div>
-        <div className="card">
-          <h2>Xu hướng 4 tuần</h2>
+        <div className="widget-card">
+          <div className="widget-head">
+            <h2 className="widget-title">
+              <span>📈</span> Xu hướng học tập 4 tuần
+            </h2>
+          </div>
           {p.trend.weeks.map((w: any) => (
             <div key={w.from} className="mb">
               <div className="row between small">
                 <span>
                   {dm(w.from)}–{dm(w.to)}
                 </span>
-                <span className="muted">{w.insufficientData ? `Chưa đủ dữ liệu · ${w.questions} câu` : `${pct(w.accuracy)} đúng · ${w.questions} câu`}</span>
+                <span className="muted">{w.insufficientData ? `Chưa đủ dữ liệu` : `${pct(w.accuracy)} đúng · ${w.questions} câu`}</span>
               </div>
               {!w.insufficientData && <Bar value={w.accuracy} />}
             </div>
           ))}
-          <p className="small strong">{p.trend.insufficientData ? 'Chưa đủ dữ liệu để nhận xét xu hướng.' : `${DIRECTION[p.trend.direction]} (${p.trend.delta >= 0 ? '+' : ''}${Math.round(p.trend.delta * 100)} điểm %)`}</p>
+          <p className="small strong" style={{ marginTop: 12 }}>
+            {p.trend.insufficientData ? 'Chưa đủ dữ liệu nhận xét.' : `${DIRECTION[p.trend.direction]} (${p.trend.delta >= 0 ? '+' : ''}${Math.round(p.trend.delta * 100)} điểm %)`}
+          </p>
         </div>
       </div>
     </>
