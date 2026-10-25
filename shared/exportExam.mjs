@@ -1,5 +1,5 @@
 // Xuất đề (mọi mã đề) và đáp án ra Word, công thức là Equation thật.
-import { paragraph, table, pageBreak, buildDocx } from './docx.mjs';
+import { paragraph, richBlocks, table, pageBreak, buildDocx, DocxImages } from './docx.mjs';
 import { displayedAnswer } from './generate.mjs';
 
 const PART_ROMAN = { mcq: 'I', tf: 'II', short: 'III' };
@@ -54,15 +54,15 @@ export function examBlocks(exam, variants, qById, opts = {}) {
       blocks.push(paragraph(PART_TITLE[type].replace('{n}', items.length), { bold: true, spaceAfter: 120, keepNext: true }));
       items.forEach((it, i) => {
         const q = qById[it.qid];
-        blocks.push(paragraph(q.stem, { prefix: [{ text: `Câu ${i + 1}. `, bold: true }], align: 'both', keepNext: true }));
+        blocks.push(...richBlocks(q.stem, { prefix: [{ text: `Câu ${i + 1}. `, bold: true }], align: 'both', keepNext: true, images: opts.images }));
         if (type === 'mcq') {
           const perm = it.perm ?? [0, 1, 2, 3];
-          perm.forEach((orig, d) => blocks.push(paragraph(q.options[orig], { prefix: [{ text: `${'ABCD'[d]}. `, bold: true }], indent: 400, spaceAfter: 20 })));
+          perm.forEach((orig, d) => blocks.push(paragraph(q.options[orig], { prefix: [{ text: `${'ABCD'[d]}. `, bold: true }], indent: 400, spaceAfter: 20, images: opts.images })));
         } else if (type === 'tf') {
-          q.options.forEach((s, k) => blocks.push(paragraph(s, { prefix: [{ text: `${'abcd'[k]}) ` , bold: true }], indent: 400, spaceAfter: 20 })));
+          q.options.forEach((s, k) => blocks.push(paragraph(s, { prefix: [{ text: `${'abcd'[k]}) `, bold: true }], indent: 400, spaceAfter: 20, images: opts.images })));
         }
         if (opts.withSolutions && q.explanation) {
-          blocks.push(paragraph(q.explanation, { prefix: [{ text: 'Lời giải. ', bold: true, italic: true }], indent: 400, color: '1F4E79' }));
+          blocks.push(...richBlocks(q.explanation, { prefix: [{ text: 'Lời giải. ', bold: true, italic: true }], indent: 400, color: '1F4E79', images: opts.images }));
         }
       });
     }
@@ -95,6 +95,8 @@ export function examBlocks(exam, variants, qById, opts = {}) {
   return blocks;
 }
 
+/** opts.imageResolver(id) → { data, mime, cx, cy } | null: bật xuất hình trong câu hỏi. */
 export function examToDocx(exam, variants, qById, opts = {}, type = 'nodebuffer') {
-  return buildDocx(examBlocks(exam, variants, qById, opts), type);
+  const images = opts.imageResolver ? new DocxImages(opts.imageResolver) : null;
+  return buildDocx(examBlocks(exam, variants, qById, { ...opts, images }), type, images);
 }

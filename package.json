@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test && npm run build",
     "reset": "node server/reset.mjs",
-    "restore": "node server/restore.mjs"
+    "restore": "node server/restore.mjs",
+    "bench": "node tests/bench/bench.mjs"
   },
   "engines": {
     "node": ">=22.13"

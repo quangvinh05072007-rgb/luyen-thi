@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { api, download, post } from '../../api';
 import { MathText } from '../../ui/MathText';
 import { go, LevelBadge, topicName, TypeBadge, useApp } from '../../ui/kit';
@@ -38,6 +38,28 @@ export function ImportPage() {
   const [open, setOpen] = useState<number | null>(null);
   const [saved, setSaved] = useState<number[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const keyRef = useRef<HTMLInputElement>(null);
+  const [riskFirst, setRiskFirst] = useState(true);
+  const [rawOpen, setRawOpen] = useState<Set<number>>(new Set());
+  const [keyMsg, setKeyMsg] = useState<string | null>(null);
+
+  // Nạp file đáp án rời, đối chiếu với các câu đang duyệt; nguồn nào mâu thuẫn thì câu bị để trống và đánh dấu.
+  const loadKey = async (file: File) => {
+    if (!result) return;
+    setBusy(true);
+    setKeyMsg(null);
+    try {
+      const k = await api('POST', `/api/import/answers?filename=${encodeURIComponent(file.name)}`, undefined, { raw: await file.arrayBuffer(), timeoutMs: 120000 });
+      const r = await post('/api/import/apply-key', { questions: result.questions, entries: k.entries, kind: result.info?.kind });
+      setResult((cur) => cur && { ...cur, questions: r.questions });
+      setKeyMsg(`Đã đối chiếu ${r.applied}/${k.count} đáp án từ ${file.name}.${r.conflicts ? ` ${r.conflicts} câu mâu thuẫn với nguồn khác — kiểm tra lại.` : ''}${r.unmatched.length ? ` ${r.unmatched.length} đáp án không khớp câu nào.` : ''}`);
+    } catch (e: any) {
+      setKeyMsg(e.message);
+    } finally {
+      setBusy(false);
+      if (keyRef.current) keyRef.current.value = '';
+    }
+  };
 
   const parseFile = async (file: File) => {
     setBusy(true);
@@ -91,6 +113,13 @@ export function ImportPage() {
   };
 
   const qs = result?.questions ?? [];
+  // Câu đáng ngờ xếp lên trước (giữ nguyên thứ tự trong cùng mức) để xem kỹ nhất những câu dễ sai.
+  const order = useMemo(() => {
+    const idx = qs.map((_, i) => i);
+    if (riskFirst) idx.sort((a, b) => (qs[b].suspicion?.score ?? 0) - (qs[a].suspicion?.score ?? 0) || a - b);
+    return idx;
+  }, [qs, riskFirst]);
+  const risky = qs.filter((q) => q.suspicion && q.suspicion.level !== 'low').length;
   const ready = qs.filter((q) => problems(q).length === 0).length;
   return (
     <div className="stack">
@@ -182,6 +211,21 @@ export function ImportPage() {
                 )}
               </div>
             </div>
+            <div className="row mt small" style={{ gap: 8 }}>
+              <span className="muted">{risky} câu cần xem kỹ</span>
+              <label className="row" style={{ gap: 4 }}>
+                <input type="checkbox" checked={riskFirst} onChange={(e) => setRiskFirst(e.target.checked)} /> Câu đáng ngờ lên trước
+              </label>
+              {!saved && (
+                <>
+                  <input ref={keyRef} type="file" hidden accept=".docx,.pdf,.xlsx,.csv,.txt" onChange={(e) => e.target.files?.[0] && loadKey(e.target.files[0])} />
+                  <button className="btn sm" disabled={busy} onClick={() => keyRef.current?.click()}>
+                    Nạp file đáp án rời
+                  </button>
+                </>
+              )}
+            </div>
+            {keyMsg && <div className="alert warn small mt">{keyMsg}</div>}
             {result.warnings.map((w, i) => (
               <div key={i} className="alert warn small mt">
                 {w}
@@ -190,7 +234,8 @@ export function ImportPage() {
             {saved && <div className="alert ok small mt">Đã lưu dạng nháp. Duyệt ngay các câu hợp lệ, hoặc vào Ngân hàng để sửa thêm.</div>}
           </div>
           <div className="stack">
-            {qs.map((q, i) => {
+            {order.map((i) => {
+              const q = qs[i];
               const p = problems(q);
               const low = (q.tagConfidence ?? 1) < 0.5;
               return (
@@ -206,7 +251,26 @@ export function ImportPage() {
                       {low ? ' · cần xem' : ''}
                     </span>
                     {p.length > 0 && <span className="badge red">{p.join(', ')}</span>}
+                    {q.suspicion && q.suspicion.level !== 'low' && (
+                      <span className={`badge ${q.suspicion.level === 'high' ? 'red' : 'amber'}`} title={q.suspicion.reasons.join(' · ')}>
+                        {q.suspicion.level === 'high' ? 'Cần xem kỹ' : 'Nên xem'}
+                      </span>
+                    )}
                     <span style={{ flex: 1 }} />
+                    {q.raw && (
+                      <button
+                        className="btn ghost sm"
+                        onClick={() =>
+                          setRawOpen((cur) => {
+                            const n = new Set(cur);
+                            n.has(i) ? n.delete(i) : n.add(i);
+                            return n;
+                          })
+                        }
+                      >
+                        {rawOpen.has(i) ? 'Ẩn bản gốc' : 'So bản gốc'}
+                      </button>
+                    )}
                     {!saved && (
                       <>
                         <button className="btn sm" onClick={() => setOpen(open === i ? null : i)}>
@@ -218,6 +282,32 @@ export function ImportPage() {
                       </>
                     )}
                   </div>
+                  {q.suspicion && q.suspicion.level !== 'low' && (
+                    <ul className="tiny mb" style={{ margin: '0 0 6px', paddingLeft: 18, color: 'var(--warn)' }}>
+                      {q.suspicion.reasons.map((r: string, k: number) => (
+                        <li key={k}>{r}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {rawOpen.has(i) && (
+                    <div className="grid-2 mb" style={{ gap: 8 }}>
+                      <div>
+                        <div className="tiny muted">Bản gốc trong file</div>
+                        <pre className="small" style={{ whiteSpace: 'pre-wrap', margin: 0, padding: 8, border: '1px solid var(--line)', borderRadius: 6 }}>{q.raw}</pre>
+                      </div>
+                      <div>
+                        <div className="tiny muted">Máy đã tách thành</div>
+                        <div className="small" style={{ padding: 8, border: '1px solid var(--line)', borderRadius: 6 }}>
+                          <MathText as="div" text={q.stem} />
+                          {q.options?.filter(Boolean).map((o: string, k: number) => (
+                            <div key={k}>
+                              <b>{q.type === 'tf' ? 'abcd'[k] + ')' : 'ABCD'[k] + '.'}</b> <MathText text={o} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {open === i ? (
                     <QuestionEditor q={q} onChange={(nq) => update(i, nq)} />
                   ) : (

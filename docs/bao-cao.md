@@ -169,3 +169,16 @@ Chưa thử: học sinh truy cập thật từ máy khác qua mạng LAN (phụ 
 - Thử tải chạy trong cùng một tiến trình với máy chủ, chưa thử bằng nhiều máy qua Wi-Fi lớp học. **Phát hiện**: 300 kết nối mở cùng một lúc trên Windows 11 thường bị từ chối (`ECONNREFUSED`) vì hàng đợi kết nối của hệ điều hành nhỏ; khi đó phải rải học sinh vào theo đợt ≤ 100. Chưa thêm tự thử lại kết nối ở phía trình duyệt.
 - Chưa thử Safari/iOS, chưa thử PDF scan (cần AI), chưa có khóa AI nên các chức năng AI vẫn chưa kiểm thử thật.
 - Chưa có giao diện nút khôi phục: khôi phục làm bằng dòng lệnh.
+
+## 13. Giai đoạn 1 — nhập đề chính xác (25/10/2026)
+
+Chi tiết số liệu và giới hạn ở `docs/do-chinh-xac.md`. `npm run check`: 113/113 test đạt, build thành công.
+
+- **Hình và bảng** (`tests/images.test.mjs`): đọc hình PNG/JPEG/GIF/WebP từ Word (nhận dạng theo nội dung, tối đa 5 MB/hình, 60 hình/file, loại SVG/EMF/WMF), lưu vào bảng `images` của trường (khử trùng theo SHA-256), câu hỏi giữ dấu `[[img:N]]`. API `GET /api/images/:id` chỉ trong cùng trường. Bảng dữ liệu (bảng biến thiên…) thành dòng `| a | b |` — bảng đáp án và bảng phương án xếp cột vẫn đọc như cũ. Giao diện hiển thị hình và bảng (đã xem trên trình duyệt thật, hình 360×240 nạp được). **Xuất Word**: hình và bảng được nhúng lại; file xuất mở được trong Microsoft Word (2 hình, 5 bảng), nhập lại ra đúng hình (cùng SHA-256). Hình vẽ khối/biểu đồ của Word chưa nhập được (đánh dấu `[hình]`).
+- **Đáp án nhiều nguồn** (`tests/importreview.test.mjs`): đối chiếu dấu gạch chân/màu/`*`, dòng "Đáp án", "Chọn X" trong lời giải, bảng đáp án, file đáp án rời. Khớp → nhận và ghi nguồn; **mâu thuẫn → để trống, nêu rõ từng nguồn nói gì**. API `POST /api/import/answers` (Word, PDF, Excel, CSV, txt, bảng dọc) và `POST /api/import/apply-key`.
+- **Bộ đo độ chính xác**: `npm run bench`, 11 kiểu trình bày × 64 câu + bộ 42 câu để dành; test giữ ngưỡng (đáp án sai = 0, lỗi âm thầm = 0).
+- **Màn hình duyệt sau nhập** (`Import.tsx`): câu đáng ngờ xếp trước, lý do cụ thể, "So bản gốc" cạnh bản đã tách, nút "Nạp file đáp án rời". Đã thử trên trình duyệt thật bằng đoạn văn bản dán.
+- **Công thức** (`tests/formulas.test.mjs`): 33 công thức do Word dựng (ma trận, hệ, tích phân, giới hạn, véc-tơ, ℝ ℕ, phần nguyên…) đều đọc ra LaTeX mà KaTeX hiển thị được; thêm `f'`, `\mathbb`, tiền chỉ số, khung, `\overset`; cấu trúc OMML lạ và MathType OLE được **báo rõ** (cảnh báo + độ đáng ngờ cao).
+- Lỗi thật đã sửa: đáp án viết liền "ĐSĐS"; `6\%` mất dấu `\`; khoảng trắng thừa quanh công thức; bộ phân loại chuyên đề coi "một" là "mốt".
+
+**Chưa làm / hạn chế:** chưa có đề thật để đo; PDF chỉ thử một file; chưa thử trên Word do người dùng thật soạn; chưa có ô chèn/vẽ hình trong trình soạn câu hỏi.

@@ -1,6 +1,7 @@
 // Nhập đề từ file: Word, PDF (có lớp chữ), Excel/CSV, văn bản; ảnh cần AI.
 import { readDocx } from '../shared/docx.mjs';
-import { parseExamText } from '../shared/parse.mjs';
+import { parseExamText, parseAnswerFileText } from '../shared/parse.mjs';
+import { assessQuestion } from '../shared/review.mjs';
 import { readXlsx, parseCsv, rowsToQuestions } from '../shared/sheet.mjs';
 import { classifyQuestion } from '../shared/classify.mjs';
 
@@ -38,17 +39,33 @@ export async function pdfToText(buf) {
 }
 
 /** Gắn chuyên đề/mức độ cho câu chưa có, giữ lại độ tin cậy để giáo viên xem. */
-export function tagDrafts(questions) {
+export function tagDrafts(questions, kind = null) {
   return questions.map((q) => {
     const c = classifyQuestion(q);
-    return {
+    const tagged = {
       ...q,
       topic: q.topic ?? c.topic,
       level: q.level ?? c.level,
       tagConfidence: q.topic ? 1 : c.confidence,
       topicAlternatives: c.alternatives,
     };
+    return { ...tagged, suspicion: assessQuestion(tagged, { kind }) };
   });
+}
+
+/** Chữ của file đáp án riêng (Word, PDF, Excel/CSV, txt) để đọc bảng đáp án. */
+export async function answerFileToText(name, buf) {
+  const ext = (name.match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
+  if (ext === 'docx') return (await readDocx(buf)).text;
+  if (ext === 'pdf') return (await pdfToText(buf)).text;
+  if (ext === 'xlsx') return (await readXlsx(buf)).map((r) => r.join(' | ')).join('\n');
+  if (ext === 'csv') return parseCsv(buf.toString('utf8')).map((r) => r.join(' | ')).join('\n');
+  if (ext === 'txt' || ext === 'md') return buf.toString('utf8');
+  throw Object.assign(new Error(`File đáp án .${ext} chưa hỗ trợ. Dùng .docx, .pdf, .xlsx, .csv hoặc .txt.`), { status: 400 });
+}
+
+export function answerEntriesFromText(text) {
+  return parseAnswerFileText(text);
 }
 
 /**
@@ -59,10 +76,13 @@ export async function importFile(name, buf, ai) {
   const info = { file: name, kind: ext };
   let parsed;
   if (ext === 'docx') {
-    const { text, stats } = await readDocx(buf);
+    const { text, stats, images: pics } = await readDocx(buf);
     Object.assign(info, stats);
     parsed = parseExamText(text);
-    if (stats.images) parsed.warnings.push(`File có ${stats.images} hình — bản này chưa nhập hình, câu có hình được đánh dấu [hình] để giáo viên bổ sung.`);
+    parsed.images = pics;
+    if (stats.importedImages) parsed.warnings.push(`Đã nhập ${stats.importedImages} hình vào câu hỏi. Kiểm tra hình nằm đúng câu.`);
+    if (stats.skippedImages + stats.unreadableImages) parsed.warnings.push(`${stats.skippedImages + stats.unreadableImages} hình/biểu đồ chưa nhập được (định dạng EMF/WMF, biểu đồ hoặc hình vẽ của Word, hoặc quá lớn) — câu đó được đánh dấu [hình]; hãy chụp hình rồi bổ sung.`);
+    if (stats.unknownMath?.length) parsed.warnings.push(`Công thức dùng cấu trúc chưa hỗ trợ (${stats.unknownMath.join(', ')}) — nội dung bên trong vẫn được đọc nhưng hình dạng có thể sai. Kiểm tra các câu có công thức.`);
     if (stats.oleEquations) parsed.warnings.push(`File có ${stats.oleEquations} công thức MathType (OLE) — chưa đọc được. Trong Word, dùng MathType → Convert Equations sang Office Math rồi nhập lại.`);
   } else if (ext === 'doc') {
     throw Object.assign(new Error('File .doc (Word 97–2003) chưa hỗ trợ. Mở bằng Word và lưu thành .docx rồi nhập lại.'), { status: 400 });
@@ -92,7 +112,7 @@ export async function importFile(name, buf, ai) {
   } else {
     throw Object.assign(new Error(`Chưa hỗ trợ file .${ext}. Dùng .docx, .pdf, .xlsx, .csv, .txt hoặc ảnh.`), { status: 400 });
   }
-  return { questions: tagDrafts(parsed.questions), warnings: parsed.warnings, info };
+  return { questions: tagDrafts(parsed.questions, ext), warnings: parsed.warnings, info, images: parsed.images ?? [] };
 }
 
 export function importText(text) {

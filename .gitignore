@@ -3,3 +3,5 @@ dist/
 data/
 config.local.json
 *.log
+tmp-out/
+tmp-serve.mjs

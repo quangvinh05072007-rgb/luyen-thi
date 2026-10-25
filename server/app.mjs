@@ -4,11 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { openDb, toQuestion } from './db.mjs';
 import { hashPassword, verifyPassword, verifyPasswordAsync, newToken, tempPassword, LoginLimiter, parseCookies } from './security.mjs';
-import { importFile, importText } from './importers.mjs';
+import { importFile, importText, answerFileToText, answerEntriesFromText, tagDrafts } from './importers.mjs';
+import { applyAnswerEntries } from '../shared/parse.mjs';
 import { makeAi } from './ai.mjs';
 import { gradeAttempt, gradeQuestion } from '../shared/grading.mjs';
 import { vnDay, scheduleReview, startOfDayMs, isDue, overdueDays } from '../shared/spaced.mjs';
 import { buildProgress } from '../shared/progress.mjs';
+import crypto from 'node:crypto';
 import { hashSeed } from '../shared/rng.mjs';
 import { generateExam, makeVariant, makeVariants, variantLayout, assignVariants, toOriginalResponse, OFFICIAL_BLUEPRINT } from '../shared/generate.mjs';
 import { diagnoseAttempt, diagnoseItem, computeMastery, recommend, selectPractice } from '../shared/diagnose.mjs';
@@ -558,8 +560,56 @@ export function createApp(config = {}) {
     if (query.filename) res = await importFile(String(query.filename), raw, ai);
     else if (typeof body?.text === 'string') res = importText(body.text);
     else fail(400, 'Gửi file hoặc dán văn bản đề.');
-    audit(user, 'import_parse', `${query.filename ?? 'văn bản dán'}: ${res.questions.length} câu`, ip);
+    // Hình trong file được lưu vào CSDL của trường; trong câu hỏi thay khóa tạm bằng mã hình thật.
+    const idMap = {};
+    for (const im of res.images ?? []) idMap[im.key] = saveImage(user, im);
+    const fix = (t) => (typeof t === 'string' ? t.replace(/\[\[img:(\w+)\]\]/g, (m, k) => (idMap[k] !== undefined ? `[[img:${idMap[k]}]]` : '[hình]')) : t);
+    for (const q of res.questions) {
+      q.stem = fix(q.stem);
+      q.options = (q.options ?? []).map(fix);
+      q.explanation = fix(q.explanation);
+    }
+    delete res.images;
+    audit(user, 'import_parse', `${query.filename ?? 'văn bản dán'}: ${res.questions.length} câu${Object.keys(idMap).length ? `, ${Object.keys(idMap).length} hình` : ''}`, ip);
     return res;
+  });
+  function saveImage(user, im) {
+    const buf = Buffer.from(im.data);
+    const sha = crypto.createHash('sha256').update(buf).digest('hex');
+    const hit = db.get('SELECT id FROM images WHERE school_id = ? AND sha = ?', user.school_id, sha);
+    if (hit) return hit.id;
+    return Number(db.run('INSERT INTO images (school_id, sha, mime, data, cx, cy, created_by, created_at) VALUES (?,?,?,?,?,?,?,?)', user.school_id, sha, im.mime, buf, im.cx ?? 0, im.cy ?? 0, user.id, now()).lastInsertRowid);
+  }
+  function imageResolver(schoolId) {
+    return (id) => {
+      const r = db.get('SELECT mime, data, cx, cy FROM images WHERE id = ? AND school_id = ?', id, schoolId);
+      return r ? { mime: r.mime, data: Buffer.from(r.data), cx: r.cx || 3000000, cy: r.cy || 2000000 } : null;
+    };
+  }
+  route('GET', '/api/images/:id', ['admin', 'teacher', 'student'], ({ user, params }) => {
+    const r = db.get('SELECT mime, data FROM images WHERE id = ? AND school_id = ?', params.id, user.school_id);
+    if (!r) fail(404, 'Không tìm thấy hình.');
+    return { __file: { name: `hinh-${params.id}`, type: r.mime, data: Buffer.from(r.data), inline: true } };
+  });
+  // File đáp án rời: đọc thành bảng đáp án, rồi đối chiếu với các câu đang duyệt.
+  route('POST', '/api/import/answers', STAFF, async ({ user, raw, query, body, ip }) => {
+    let text;
+    if (query.filename) text = await answerFileToText(String(query.filename), raw);
+    else if (typeof body?.text === 'string') text = body.text;
+    else fail(400, 'Gửi file đáp án hoặc dán bảng đáp án.');
+    const entries = answerEntriesFromText(text);
+    if (!entries.length) fail(400, 'Không đọc được đáp án nào. Mỗi dòng cần dạng "1. A", "Câu 2: C" hoặc bảng Câu | Đáp án.');
+    audit(user, 'import_answers', `${query.filename ?? 'văn bản dán'}: ${entries.length} đáp án`, ip);
+    return { entries, count: entries.length };
+  });
+  route('POST', '/api/import/apply-key', STAFF, ({ user, body, ip }) => {
+    const qs = Array.isArray(body.questions) ? body.questions : [];
+    const entries = Array.isArray(body.entries) ? body.entries : [];
+    if (!qs.length || !entries.length) fail(400, 'Cần có câu hỏi và bảng đáp án.');
+    const { applied, unmatched } = applyAnswerEntries(qs, entries, 'file');
+    const out = tagDrafts(qs.map(({ suspicion, ...q }) => q), body.kind ?? null);
+    audit(user, 'import_apply_key', `${applied}/${entries.length} đáp án khớp, ${out.filter((q) => q.answerConflict).length} câu mâu thuẫn`, ip);
+    return { questions: out, applied, unmatched, conflicts: out.filter((q) => q.answerConflict).length };
   });
   route('POST', '/api/import/save', STAFF, ({ user, body, ip }) => {
     const qs = Array.isArray(body.questions) ? body.questions : [];
@@ -645,7 +695,7 @@ export function createApp(config = {}) {
     if (!e) fail(404, 'Không tìm thấy đề.');
     const school = db.get('SELECT name FROM schools WHERE id = ?', user.school_id);
     const variants = e.variants.map((v) => ({ code: v.code, layout: variantLayout(e.id, e.items, v) }));
-    const buf = await examToDocx({ title: e.title, school: school.name, durationMin: e.duration_min }, variants, e.snapshot, { withSolutions: query.solutions === '1', baseItems: e.items });
+    const buf = await examToDocx({ title: e.title, school: school.name, durationMin: e.duration_min }, variants, e.snapshot, { withSolutions: query.solutions === '1', baseItems: e.items, imageResolver: imageResolver(user.school_id) });
     audit(user, 'exam_export_docx', `#${e.id}`, ip, { target: `exam:${e.id}` });
     const safe = e.title.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^\w-]+/g, '-').slice(0, 60);
     return { __file: { name: `${safe || 'de-thi'}.docx`, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: buf } };
@@ -1464,7 +1514,7 @@ export function createApp(config = {}) {
       let raw = null;
       let body = {};
       if (req.method !== 'GET') {
-        raw = await readBody(req, url.pathname === '/api/import' ? 25e6 : 3e6);
+        raw = await readBody(req, url.pathname === '/api/import' || url.pathname === '/api/import/answers' ? 25e6 : 3e6);
         if ((req.headers['content-type'] ?? '').includes('application/json') && raw.length) {
           try {
             body = JSON.parse(raw.toString('utf8'));
@@ -1487,7 +1537,7 @@ export function createApp(config = {}) {
       if (cookieOut.length) res.setHeader('set-cookie', cookieOut);
       if (result?.__file) {
         const f = result.__file;
-        res.writeHead(200, { ...headers, 'content-type': f.type, 'content-disposition': `attachment; filename="${f.name}"`, 'cache-control': 'no-store' });
+        res.writeHead(200, f.inline ? { ...headers, 'content-type': f.type, 'content-disposition': 'inline', 'cache-control': 'private, max-age=86400', 'content-security-policy': "default-src 'none'; sandbox" } : { ...headers, 'content-type': f.type, 'content-disposition': `attachment; filename="${f.name}"`, 'cache-control': 'no-store' });
         res.end(f.data);
         return;
       }

@@ -325,14 +325,15 @@ function wrap(s) {
 function runToLatex(text) {
   let out = '';
   for (const ch of text) {
-    if (SYMBOL_BACK[ch]) out += `\\${SYMBOL_BACK[ch]} `;
+    if (ch === '′') out += "'";
+    else if (SYMBOL_BACK[ch]) out += `\\${SYMBOL_BACK[ch]} `;
     else if (ch === '−') out += '-';
-    else if (ch === '′') out += "'";
     else if (ch === 'ℝ') out += '\\mathbb{R}';
     else if (ch === 'ℕ') out += '\\mathbb{N}';
     else if (ch === 'ℤ') out += '\\mathbb{Z}';
     else if (ch === 'ℚ') out += '\\mathbb{Q}';
     else if (ch === '{' || ch === '}') out += '\\' + ch;
+    else if (ch === '%' || ch === '#' || ch === '$') out += '\\' + ch; // trong KaTeX: % mở chú thích, $ đóng công thức
     else out += ch;
   }
   const t = out.trim();
@@ -347,14 +348,33 @@ function propVal(node, prName, key, dflt) {
   return k.attrs['m:val'] ?? dflt;
 }
 
+// Thành phần OMML chỉ là "vỏ" bọc nội dung: đọc xuống con là đủ. Thành phần khác bị ghi nhận để báo cho giáo viên.
+const OMML_PLAIN = new Set(['m:oMath', 'm:oMathPara', 'm:e', 'm:num', 'm:den', 'm:sub', 'm:sup', 'm:deg', 'm:fName', 'm:lim', 'm:t', 'm:mr', 'm:oMathParaPr']);
+const unknownOmml = new Set();
+
+/** Lấy (và xóa) danh sách thành phần công thức chưa hỗ trợ đã gặp từ lần gọi trước. */
+export function drainUnknownOmml() {
+  const out = [...unknownOmml];
+  unknownOmml.clear();
+  return out;
+}
+
 export function ommlToLatex(node) {
   if (!node) return '';
   if (node.text !== undefined) return '';
   const kids = (name) => children(node, name).map(ommlToLatex);
   const one = (name) => ommlToLatex(child(node, name));
   switch (node.name) {
-    case 'm:r':
-      return runToLatex(textOf(child(node, 'm:t')) || children(node, 'm:t').map(textOf).join(''));
+    case 'm:r': {
+      const raw = (textOf(child(node, 'm:t')) || children(node, 'm:t').map(textOf).join('')).replace(/[\u200b\u2061\u2062\u2063]/g, '');
+      const scr = propVal(node, 'm:rPr', 'm:scr', null);
+      const sty = propVal(node, 'm:rPr', 'm:sty', null);
+      const cmd = scr === 'double-struck' ? 'mathbb' : scr === 'script' ? 'mathcal' : scr === 'fraktur' ? 'mathfrak' : sty === 'b' || sty === 'bi' ? 'mathbf' : null;
+      // Kiểu chữ áp cho cả cụm (Word gộp "⊂R" vào một run): chỉ bọc các chữ cái.
+      if (cmd && /[A-Za-z]/.test(raw)) return [...raw].map((ch) => (/[A-Za-z]/.test(ch) ? '\\'+cmd+'{'+ch+'}' : runToLatex(ch))).join('');
+      const t = runToLatex(raw);
+      return t;
+    }
     case 'm:f': {
       const type = propVal(node, 'm:fPr', 'm:type', 'bar');
       if (type === 'lin') return `${wrap(one('m:num'))}/${wrap(one('m:den'))}`;
@@ -366,8 +386,19 @@ export function ommlToLatex(node) {
       const deg = one('m:deg').trim();
       return hide === '1' || hide === 'on' || !deg ? `\\sqrt{${one('m:e')}}` : `\\sqrt[${deg}]{${one('m:e')}}`;
     }
-    case 'm:sSup':
-      return `${wrap(one('m:e'))}^${wrap(one('m:sup'))}`;
+    case 'm:sSup': {
+      const sup = one('m:sup').trim();
+      const rawSup = textOf(child(node, 'm:sup')).trim();
+      if (/^(?:'|′)+$/.test(rawSup)) return `${wrap(one('m:e'))}${rawSup.replace(/′/g, "'")}`; // f' , f''
+      return `${wrap(one('m:e'))}^${wrap(sup)}`;
+    }
+    case 'm:sPre':
+      return `{}_${wrap(one('m:sub'))}^${wrap(one('m:sup'))}${wrap(one('m:e'))}`;
+    case 'm:borderBox':
+      return `\\boxed{${one('m:e')}}`;
+    case 'm:box':
+    case 'm:phant':
+      return one('m:e');
     case 'm:sSub':
       return `${wrap(one('m:e'))}_${wrap(one('m:sub'))}`;
     case 'm:sSubSup':
@@ -381,7 +412,7 @@ export function ommlToLatex(node) {
         const rows = children(child(es[0], 'm:eqArr'), 'm:e').map(ommlToLatex);
         return `\\begin{cases} ${rows.join(' \\\\ ')} \\end{cases}`;
       }
-      const L = { '{': '\\{', '}': '\\}', '': '.', '|': '|', '‖': '\\|', '⟨': '\\langle', '⟩': '\\rangle' };
+      const L = { '{': '\\{', '}': '\\}', '': '.', '|': '|', '‖': '\\|', '⟨': '\\langle', '⟩': '\\rangle', '⌊': '\\lfloor', '⌋': '\\rfloor', '⌈': '\\lceil', '⌉': '\\rceil' };
       return `\\left${L[beg] ?? beg} ${es.map(ommlToLatex).join(sep === '|' ? ' \\mid ' : sep)} \\right${L[end] ?? end}`;
     }
     case 'm:nary': {
@@ -398,7 +429,7 @@ export function ommlToLatex(node) {
       return `${base === 'lim' ? '\\lim' : base}_${wrap(one('m:lim'))}`;
     }
     case 'm:limUpp':
-      return `${one('m:e')}^${wrap(one('m:lim'))}`;
+      return `\\overset{${one('m:lim')}}{${one('m:e')}}`;
     case 'm:acc': {
       const chr = propVal(node, 'm:accPr', 'm:chr', '̂');
       const body = one('m:e');
@@ -422,6 +453,7 @@ export function ommlToLatex(node) {
       return kids('m:e').join(' \\\\ ');
     default:
       if (node.name?.endsWith('Pr') || node.name === 'w:rPr') return '';
+      if (node.name?.startsWith('m:') && !OMML_PLAIN.has(node.name)) unknownOmml.add(node.name);
       return node.children.map(ommlToLatex).join('');
   }
 }

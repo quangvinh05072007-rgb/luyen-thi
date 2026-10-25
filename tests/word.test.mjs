@@ -87,7 +87,7 @@ test('Word: đọc phương án gạch chân là đáp án', async () => {
 test('Đoạn văn trộn chữ và công thức', async () => {
   const buf = await buildDocx([paragraph('Cho $x^2=4$, tìm $x$.')]);
   const { text } = await readDocx(buf);
-  assert.equal(text.replace(/\s+/g, ' '), 'Cho $x^2=4$ , tìm $x$ .');
+  assert.equal(text.replace(/\s+/g, ' '), 'Cho $x^2=4$, tìm $x$.');
 });
 
 test('File đề soạn bằng Microsoft Word thật: đọc Equation, đáp án gạch chân, tiêu đề phần', async () => {

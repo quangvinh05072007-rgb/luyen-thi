@@ -2,6 +2,8 @@
 // Hiểu: "PHẦN I/II/III", "Câu 1.", phương án "A. … D." (cùng dòng hoặc nhiều dòng), ý "a) … d)",
 // đáp án đánh dấu "*" hoặc [[OK]] (gạch chân/tô đỏ trong Word), dòng "Đáp án: …", "Lời giải: …", bảng đáp án cuối đề.
 
+import { normalizeShort, parseNumber } from './grading.mjs';
+
 export const OK_MARK = '[[OK]]';
 
 const PART_RE = /^\s*PH[ẦẦAÂ]N\s+(III|II|I|3|2|1)\b[.:\s-]*(.*)$/iu;
@@ -56,6 +58,9 @@ function splitByLabels(text, seq) {
 }
 
 function parseTfTokens(s) {
+  // Dạng viết liền "ĐSĐS" (rất hay gặp trong đáp án): từng chữ là một ý.
+  const compact = s.replace(/[\s,;.\-–]/g, '');
+  if (/^[ĐSđs]{4}$/u.test(compact)) return [...compact.toUpperCase()].map((c) => c === 'Đ');
   const t = s.replace(/\b[a-d]\s*[).:-]\s*/giu, ' ');
   const tokens = [...t.matchAll(/(Đúng|Sai|ĐÚNG|SAI|Đ|S|T|F|true|false)(?![\p{L}])/giu)].map((m) => m[1].toLowerCase());
   const vals = tokens.map((x) => x === 'đúng' || x === 'đ' || x === 't' || x === 'true');
@@ -72,7 +77,7 @@ function parseKeyValue(raw) {
 }
 
 /** Đọc bảng đáp án cuối đề. */
-function parseAnswerKey(lines) {
+export function parseAnswerKey(lines) {
   const entries = [];
   let part = null;
   const cells = (l) => l.split(/\s*\|\s*|\s+/).filter(Boolean).filter((c) => !/^(Câu|Đáp|án|ĐA)$/iu.test(c));
@@ -96,8 +101,17 @@ function parseAnswerKey(lines) {
       part = PART_NAME[pm[1].toUpperCase()];
       continue;
     }
+    // Bảng dọc (Excel/Word): mỗi dòng "1 | A" hoặc "| 1 | A |"
+    const two = line.split('|').map((c) => c.trim()).filter(Boolean);
+    if (two.length === 2 && /^\d+$/.test(two[0])) {
+      const kv = parseKeyValue(two[1]);
+      if (kv.kind !== 'text') {
+        entries.push({ num: Number(two[0]), part, ...kv });
+        continue;
+      }
+    }
     // "Câu 13: ĐSĐS", "1.A 2.B", "1-A", "Câu 17: 1,5"
-    const re = /(?:Câu\s*)?(\d+)\s*[.:\-)]?\s*((?:[a-d]\s*\)\s*(?:Đúng|Sai|Đ|S)\s*[,;]?\s*){4}|[ĐS]{4}\b|[A-D](?![\p{L}\d])|[-−]?\d+(?:,\d+)?(?![\p{L}\d.]))/giu;
+    const re = /(?:Câu\s*)?(\d+)\s*[.:\-)]?\s*((?:[a-d]\s*\)\s*(?:Đúng|Sai|Đ|S)\s*[,;]?\s*){4}|[ĐS]{4}(?![\p{L}\d])|[A-D](?![\p{L}\d])|[-−]?\d+(?:,\d+)?(?![\p{L}\d.]))/giu;
     let m;
     while ((m = re.exec(line))) {
       const kv = parseKeyValue(m[2]);
@@ -131,7 +145,7 @@ function parseBlock(block) {
   if (type === 'mcq' && !mcqSeq && tfSeq) type = 'tf';
   if (type === 'tf' && !tfSeq && mcqSeq) type = 'mcq';
 
-  const q = { num: block.num, part: block.part, type, stem: '', options: [], answer: null, explanation: clean(stripOk(explanation)), warnings };
+  const q = { num: block.num, part: block.part, type, stem: '', options: [], answer: null, explanation: clean(stripOk(explanation)), warnings, answerCands: [], raw: block.lines.join('\n') };
 
   if (type === 'mcq' || type === 'tf') {
     const seq = type === 'mcq' ? mcqSeq : tfSeq;
@@ -146,10 +160,13 @@ function parseBlock(block) {
       q.options = parts.map((p) => clean(stripOk(p)));
       if (type === 'mcq') {
         const marked = okFlags.map((f, i) => (f ? i : -1)).filter((i) => i >= 0);
-        if (marked.length === 1) q.answer = marked[0];
-        else if (marked.length > 1) warnings.push('Có nhiều phương án được đánh dấu đúng.');
+        if (marked.length === 1) {
+          q.answer = marked[0];
+          q.answerCands.push({ src: 'mark', value: marked[0] });
+        } else if (marked.length > 1) warnings.push('Có nhiều phương án được đánh dấu đúng.');
       } else if (okFlags.some(Boolean)) {
         q.answer = okFlags;
+        q.answerCands.push({ src: 'mark', value: okFlags });
       }
     }
   } else {
@@ -158,18 +175,98 @@ function parseBlock(block) {
 
   if (answerRaw !== null) {
     const kv = parseKeyValue(answerRaw.replace(/^Chọn\s*/i, ''));
-    if (type === 'mcq' && kv.kind === 'mcq') q.answer = kv.value;
-    else if (type === 'tf') {
-      const tf = parseTfTokens(answerRaw);
-      if (tf) q.answer = tf;
-    } else if (type === 'short') q.answer = kv.kind === 'short' ? kv.value : answerRaw;
+    let fromLine = null;
+    if (type === 'mcq' && kv.kind === 'mcq') fromLine = kv.value;
+    else if (type === 'tf') fromLine = parseTfTokens(answerRaw);
+    else if (type === 'short') fromLine = kv.kind === 'short' ? kv.value : answerRaw;
+    if (fromLine !== null) {
+      q.answer = fromLine;
+      q.answerCands.push({ src: 'line', value: fromLine });
+    }
   }
-  if (q.answer === null && type === 'mcq') {
+  if (type === 'mcq') {
     const chon = (explanation || '').match(/\bChọn\s+(?:đáp\s+án\s+)?([A-D])\b/u);
-    if (chon) q.answer = 'ABCD'.indexOf(chon[1]);
+    if (chon) {
+      q.answerCands.push({ src: 'explain', value: 'ABCD'.indexOf(chon[1]) });
+      if (q.answer === null) q.answer = 'ABCD'.indexOf(chon[1]);
+    }
   }
   if (!q.stem) warnings.push('Đề bài trống.');
   return q;
+}
+
+const SRC_LABEL = { mark: 'dấu gạch chân/tô màu/*', line: 'dòng "Đáp án"', explain: 'lời giải "Chọn …"', key: 'bảng đáp án', file: 'file đáp án riêng', manual: 'bạn đã chọn tay' };
+
+function showAnswer(type, v) {
+  if (type === 'mcq') return 'ABCD'[v] ?? String(v);
+  if (type === 'tf') return Array.isArray(v) ? v.map((x) => (x ? 'Đ' : 'S')).join('') : String(v);
+  return String(v);
+}
+
+function sameAnswer(type, a, b) {
+  if (type === 'tf') return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => x === b[i]);
+  if (type === 'short') {
+    const [x, y] = [parseNumber(a), parseNumber(b)];
+    return Number.isNaN(x) || Number.isNaN(y) ? normalizeShort(a) === normalizeShort(b) : Math.abs(x - y) < 1e-9;
+  }
+  return a === b;
+}
+
+/**
+ * Đối chiếu mọi nguồn đáp án của từng câu (answerCands). Các nguồn khớp nhau → lấy; mâu thuẫn → KHÔNG đoán:
+ * để trống đáp án, ghi answerConflict và cảnh báo để giáo viên chọn. answerSources = các nguồn đồng ý.
+ */
+export function resolveAnswers(questions) {
+  for (const q of questions) {
+    const cands = q.answerCands ?? [];
+    delete q.answerConflict;
+    q.answerSources = [];
+    if (!cands.length) continue;
+    const groups = [];
+    for (const c of cands) {
+      const g = groups.find((x) => sameAnswer(q.type, x.value, c.value));
+      if (g) g.srcs.push(c.src);
+      else groups.push({ value: c.value, srcs: [c.src] });
+    }
+    q.warnings = (q.warnings ?? []).filter((w) => !w.startsWith('Đáp án mâu thuẫn'));
+    if (groups.length === 1) {
+      q.answer = groups[0].value;
+      q.answerSources = groups[0].srcs;
+    } else {
+      q.answer = null;
+      q.answerConflict = groups.map((g) => ({ srcs: g.srcs, value: g.value, label: showAnswer(q.type, g.value) }));
+      q.warnings.push(`Đáp án mâu thuẫn giữa các nguồn: ${q.answerConflict.map((g) => `${g.srcs.map((s) => SRC_LABEL[s] ?? s).join(' + ')} → ${g.label}`).join('; ')}. Hãy kiểm tra và chọn đáp án đúng.`);
+    }
+  }
+  return questions;
+}
+
+/**
+ * Thêm đáp án từ bảng/file đáp án vào ứng viên của từng câu rồi đối chiếu.
+ * entries: [{num, part, kind: 'mcq'|'tf'|'short', value}]. Trả { applied, unmatched }.
+ */
+export function applyAnswerEntries(questions, entries, src = 'key') {
+  const compatible = (q, e) => q.type === e.kind || (q.type === 'short' && e.kind !== 'mcq' && e.kind !== 'tf');
+  let applied = 0;
+  const unmatched = [];
+  for (const e of entries) {
+    const target = questions.find((q) => q.num === e.num && e.part && q.part === e.part && compatible(q, e)) ?? questions.find((q) => q.num === e.num && !e.part && compatible(q, e)) ?? (e.part ? questions.find((q) => q.num === e.num && !q.part && compatible(q, e)) : null);
+    if (!target) {
+      unmatched.push(e);
+      continue;
+    }
+    if (target.answer !== null && !target.answerCands?.length) (target.answerCands ??= []).push({ src: 'manual', value: target.answer });
+    (target.answerCands ??= []).push({ src, value: target.type === 'short' ? String(e.value) : e.value });
+    applied++;
+  }
+  resolveAnswers(questions);
+  return { applied, unmatched };
+}
+
+/** Đọc văn bản của file đáp án riêng (không cần dòng tiêu đề "Đáp án"). */
+export function parseAnswerFileText(text) {
+  const lines = String(text ?? '').replace(/\r\n?/g, '\n').split('\n').map((l) => l.replace(/[ \t ]+/g, ' ').trim());
+  return parseAnswerKey(lines.filter(Boolean));
 }
 
 /**
@@ -211,19 +308,10 @@ export function parseExamText(input) {
   const questions = blocks.map(parseBlock);
   const keyEntries = keyStart >= 0 ? parseAnswerKey(lines.slice(keyStart)) : [];
   const warnings = [];
-  const kindOf = { mcq: 'mcq', tf: 'tf', short: 'short' };
-  for (const e of keyEntries) {
-    const target =
-      questions.find((q) => q.num === e.num && e.part && q.part === e.part) ??
-      questions.find((q) => q.num === e.num && !e.part && kindOf[q.type] === e.kind && q.answer === null) ??
-      questions.find((q) => q.num === e.num && !e.part && q.answer === null);
-    if (!target) continue;
-    if (target.type === e.kind || (target.type === 'short' && e.kind !== 'mcq')) {
-      if (target.answer === null) target.answer = e.kind === 'short' || target.type === 'short' ? String(e.value) : e.value;
-    }
-  }
+  applyAnswerEntries(questions, keyEntries, 'key');
+  resolveAnswers(questions);
   for (const q of questions) {
-    if (q.answer === null) q.warnings.push('Chưa có đáp án — hãy chọn đáp án trước khi duyệt.');
+    if (q.answer === null && !q.answerConflict) q.warnings.push('Chưa có đáp án — hãy chọn đáp án trước khi duyệt.');
     if (q.type === 'tf' && Array.isArray(q.answer) && q.answer.length !== 4) q.warnings.push('Đáp án Đúng/Sai phải đủ 4 ý.');
   }
   if (!questions.length) warnings.push('Không tìm thấy câu nào. Mỗi câu cần bắt đầu bằng "Câu 1.", "Câu 2." …');
