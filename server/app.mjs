@@ -1063,7 +1063,10 @@ export function createApp(config = {}) {
     const ids = isAll
       ? db.all('SELECT id FROM classes WHERE school_id = ?', user.school_id).map((c) => c.id)
       : teacherClassIds(user);
-    if (!ids.length) return { classes: [] };
+    const myIds = new Set(teacherClassIds(user));
+    const totalAllCount = Number(db.get('SELECT COUNT(*) count FROM classes WHERE school_id = ?', user.school_id)?.count || 0);
+    const myCount = myIds.size;
+    if (!ids.length) return { classes: [], totalAllCount, myCount };
     const t = now();
     const rows = db.all(
       `SELECT c.id, c.name, c.grade, c.code, u.display_name teacher,
@@ -1075,8 +1078,7 @@ export function createApp(config = {}) {
       t,
       ...ids,
     );
-    const myIds = new Set(teacherClassIds(user));
-    return { classes: rows.map((r) => ({ ...r, mine: myIds.has(r.id) })) };
+    return { classes: rows.map((r) => ({ ...r, mine: myIds.has(r.id) })), totalAllCount, myCount };
   });
 
   route('POST', '/api/classes', STAFF, ({ user, body, ip }) => {

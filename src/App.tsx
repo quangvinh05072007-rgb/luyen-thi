@@ -182,7 +182,12 @@ export function App() {
               <details className="account-menu" onKeyDown={e=>{if(e.key==='Escape')e.currentTarget.open=false;}}><summary><Icon name="user"/><span>{user.displayName}</span></summary><div className="account-options" onClick={e=>{(e.currentTarget.parentElement as HTMLDetailsElement).open=false;}}><a href="#/tai-khoan">Tài khoản</a>{user.role==='admin'&&<><a href="#/nguoi-dung">Người dùng & phân công</a><a href="#/nhat-ky">Nhật ký</a><a href="#/bao-cao">Báo cáo toàn trường</a></>}<button onClick={logout}>Đăng xuất</button></div></details>
             </div>
           )}
-          {user.school.sample ? <div className="sample-banner">Bạn đang dùng <b>trường mẫu</b>: tài khoản, câu hỏi và các bài thi cũ ghi "(mô phỏng)" là dữ liệu mẫu để chạy thử.</div> : null}
+          {user.school.sample ? (
+            <div className="sample-banner">
+              <span style={{ fontSize: 16 }}>💡</span>
+              <span>Đang trải nghiệm <b>trường học mẫu</b>: tài khoản, câu hỏi và đề thi được khởi tạo sẵn để thử nghiệm đầy đủ các tính năng.</span>
+            </div>
+          ) : null}
           {page ?? (
             <div className="card empty">
               <h2>Không có trang này</h2>
