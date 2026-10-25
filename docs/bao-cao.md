@@ -129,3 +129,27 @@ Chưa thử: học sinh truy cập thật từ máy khác qua mạng LAN (phụ 
 - Mở lại lượt thi không hoàn tác XP, chuỗi ngày và lịch ôn đã tính từ lần nộp trước.
 - Yêu cầu sai dữ liệu (thiếu lý do, điểm ngoài thang) trả 400 và không ghi nhật ký; yêu cầu chưa đăng nhập không ghi.
 - Các thao tác cũ (đăng nhập, tạo đề…) vẫn ghi như trước, chưa có giá trị cũ/mới. Giáo viên chưa có trang xem nhật ký của riêng mình.
+
+## 10. Bản 0.3 — Nâng cấp 4: dữ liệu trang Tiến bộ (25/10/2026)
+
+**Đã làm (có test, `tests/progress.test.mjs`, 8 test):**
+- `shared/progress.mjs` (hàm thuần) + `GET /api/student/progress` (chỉ học sinh; không nhận mã học sinh từ đường dẫn hay tham số nên chỉ trả dữ liệu của chính người đăng nhập; giáo viên bị 403).
+- Năng lực theo chuyên đề: tỉ lệ đúng trong 90 ngày, trọng số giảm dần theo thời gian (bán rã 30 ngày) và theo mức độ (1 / 1,5 / 2). Không dùng tiên nghiệm. **Dưới 5 câu**: `insufficientData: true`, `value` và `band` là `null`, chỉ trả số câu.
+- Xu hướng 4 tuần: 4 cửa sổ 7 ngày tính đến hôm nay (giờ Việt Nam), độ chính xác từng tuần (cần ≥ 5 câu), hướng lên/xuống/giữ (ngưỡng ±5 điểm %) so nửa đầu với nửa sau; thiếu dữ liệu thì `direction: null`.
+- Chuỗi ngày học (hiện tại, dài nhất, đã học hôm nay) tính từ bảng hoạt động, còn sống nếu hôm qua có học.
+- Số câu đến hạn ôn; mục tiêu tuần (thứ Hai → Chủ nhật giờ VN) = 5 ngày × 10 câu = 50 câu, kèm đã làm / còn thiếu / đã đạt.
+- `src/pages/student/Progress.tsx`: thêm khối số liệu mới bằng `Bar`, `pct` và các lớp CSS sẵn có; giữ nguyên `ProfileView` bên dưới (không đổi CSS, bố cục).
+
+**Chưa làm / chưa kiểm thử:**
+- **Chưa xem trang Progress.tsx trên trình duyệt thật** (mới qua typecheck và build). Phần mục tiêu tuần dùng hằng số 50 câu, chưa cho học sinh hay giáo viên tự đặt.
+- Bảng "Năng lực" cũ trong `ProfileView` (có tiên nghiệm) và khối mới cùng hiện, hai cách tính có thể lệch số; nên gộp ở đợt làm giao diện.
+- Ngưỡng 5 câu, bán rã 30 ngày, ngưỡng yếu/khá/vững là giả định, chưa hiệu chỉnh bằng dữ liệu thật.
+
+## 11. Tổng kết đợt 4 nâng cấp
+
+`npm run check` (25/10/2026, Windows, Node 24): typecheck sạch, **83/83 test đạt** (trước đợt: 50), build thành công. Thêm 4 file test: `variants`, `spaced`, `audit`, `progress`. Mỗi nâng cấp có một commit riêng.
+
+**Cần bạn quyết định:**
+1. Học sinh thi theo mã đề in trong Word (đã làm) thay cho bản đảo riêng từng em — xác nhận lại nếu muốn quay về bản riêng.
+2. Giao diện còn thiếu cho các API mới: chọn chế độ chia mã / nhập nhóm câu, thống kê quá hạn cho giáo viên, nút mở lại / sửa điểm / gia hạn / xuất CSV kèm ô lý do.
+3. Mở lại lượt thi có nên hoàn tác XP, chuỗi ngày, lịch ôn đã tính không (hiện không).

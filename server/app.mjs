@@ -8,6 +8,7 @@ import { importFile, importText } from './importers.mjs';
 import { makeAi } from './ai.mjs';
 import { gradeAttempt, gradeQuestion } from '../shared/grading.mjs';
 import { vnDay, scheduleReview, startOfDayMs, isDue, overdueDays } from '../shared/spaced.mjs';
+import { buildProgress } from '../shared/progress.mjs';
 import { hashSeed } from '../shared/rng.mjs';
 import { generateExam, makeVariant, makeVariants, variantLayout, assignVariants, toOriginalResponse, OFFICIAL_BLUEPRINT } from '../shared/generate.mjs';
 import { diagnoseAttempt, diagnoseItem, computeMastery, recommend, selectPractice } from '../shared/diagnose.mjs';
@@ -977,6 +978,14 @@ export function createApp(config = {}) {
       review: profile.review,
       days: profile.days,
     };
+  });
+  // Chỉ dữ liệu của chính học sinh đang đăng nhập (không nhận mã học sinh từ đường dẫn).
+  route('GET', '/api/student/progress', ['student'], ({ user }) => {
+    const t = now();
+    const evidence = db.all('SELECT topic, level, score, at FROM evidence WHERE student_id = ? AND topic IS NOT NULL AND at > ?', user.id, t - 90 * 86400000);
+    const activity = db.all('SELECT day, questions, correct FROM activity WHERE student_id = ? AND day >= ?', user.id, dayKey(t - 120 * 86400000));
+    const reviewDue = db.get('SELECT COUNT(*) n FROM review_items WHERE student_id = ? AND due_day <= ?', user.id, dayKey(t)).n;
+    return buildProgress({ evidence, activity, reviewDue, nowMs: t, dayGoal: DAY_GOAL });
   });
   route('POST', '/api/attempts/start', ['student'], ({ user, body, ip }) => {
     const a = db.get('SELECT * FROM assignments WHERE id = ? AND school_id = ?', body.assignmentId, user.school_id);
