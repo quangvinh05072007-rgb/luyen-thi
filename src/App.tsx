@@ -13,6 +13,8 @@ import { Report } from './pages/teacher/Report';
 import { StudentProfilePage, TeacherAttemptView } from './pages/teacher/ClassView';
 import { Classes } from './pages/teacher/Classes';
 import { StudentHome } from './pages/student/StudentHome';
+import { StudentClass } from './pages/student/StudentClass';
+import { SelfStudy } from './pages/student/SelfStudy';
 import { ExamRoom } from './pages/student/ExamRoom';
 import { ResultPage } from './pages/student/Result';
 import { PracticeHub } from './pages/student/Practice';
@@ -38,8 +40,10 @@ const NAV: Record<User['role'], Nav[]> = {
   ],
   student: [
     { path: '/', label: 'Hôm nay', icon: 'home' },
-    { path: '/luyen-tap', label: 'Luyện tập', icon: 'practice' },
-    { path: '/ket-qua', label: 'Kết quả & tiến bộ', icon: 'report' },
+    { path: '/lop-hoc', label: 'Lớp học', icon: 'class' },
+    { path: '/luyen-tap', label: 'Tự luyện đề', icon: 'exam' },
+    { path: '/tu-hoc', label: 'Tự học', icon: 'book' },
+    { path: '/ket-qua', label: 'Radar năng lực', icon: 'report' },
   ],
 };
 
@@ -91,9 +95,11 @@ export function App() {
     user.role === 'student'
       ? [
           ['/', () => <StudentHome />],
+          ['/lop-hoc', () => <StudentClass />],
+          ['/luyen-tap', () => <PracticeHub />],
+          ['/tu-hoc', () => <SelfStudy />],
           ['/thi/:id', ([id]) => <ExamRoom key={id} attemptId={Number(id)} />],
           ['/ket-qua/:id', ([id]) => <ResultPage key={id} attemptId={Number(id)} />],
-          ['/luyen-tap', () => <PracticeHub />],
           ['/ket-qua', () => <StudentResults key="results" />],
           ['/tien-bo', () => <StudentResults key="progress" initial="progress" />],
           ['/khieu-nai', () => <StudentResults key="appeals" initial="appeals" />],

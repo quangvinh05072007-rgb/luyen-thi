@@ -161,7 +161,7 @@ export function createApp(config = {}) {
 
   function publicUser(u) {
     if (!u) return null;
-    const cls = u.class_id ? db.get('SELECT id, name, grade FROM classes WHERE id = ?', u.class_id) : null;
+    const cls = u.class_id ? db.get('SELECT id, name, grade, code FROM classes WHERE id = ?', u.class_id) : null;
     const school = db.get('SELECT id, name, sample FROM schools WHERE id = ?', u.school_id);
     return { id: u.id, role: u.role, username: u.username, displayName: u.display_name, class: cls, school, xp: u.xp, streak: u.streak };
   }
@@ -1047,15 +1047,38 @@ export function createApp(config = {}) {
   });
 
   // ---- lớp, giao đề, báo cáo ----
+  function makeClassCode(db, schoolId, name, grade) {
+    const prefix = String(name || 'LOP').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'LOP';
+    for (let i = 0; i < 30; i++) {
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      const code = `${prefix}-${rand}`;
+      const exists = db.get('SELECT id FROM classes WHERE code = ? AND school_id = ?', code, schoolId);
+      if (!exists) return code;
+    }
+    return `${prefix}-${Date.now().toString(36).slice(-4).toUpperCase()}`;
+  }
+
   route('GET', '/api/classes', STAFF, ({ user }) => {
     const ids = teacherClassIds(user);
     if (!ids.length) return { classes: [] };
     const rows = db.all(
-      `SELECT c.id, c.name, c.grade, u.display_name teacher, (SELECT COUNT(*) FROM users s WHERE s.class_id = c.id AND s.role = 'student' AND s.active = 1) students
+      `SELECT c.id, c.name, c.grade, c.code, u.display_name teacher, (SELECT COUNT(*) FROM users s WHERE s.class_id = c.id AND s.role = 'student' AND s.active = 1) students
        FROM classes c LEFT JOIN users u ON u.id = c.teacher_id WHERE c.id IN (${ids.map(() => '?').join(',')}) ORDER BY c.grade DESC, c.name`,
       ...ids,
     );
     return { classes: rows };
+  });
+
+  route('POST', '/api/classes', STAFF, ({ user, body, ip }) => {
+    const name = String(body.name ?? '').trim();
+    const grade = Number(body.grade);
+    if (!name || ![10, 11, 12].includes(grade)) fail(400, 'Nhập tên lớp và chọn khối 10, 11 hoặc 12.');
+    let teacherId = user.role === 'teacher' ? user.id : (body.teacherId ? Number(body.teacherId) : null);
+    if (teacherId && !db.get("SELECT id FROM users WHERE id = ? AND school_id = ? AND role = 'teacher'", teacherId, user.school_id)) fail(400, 'Giáo viên không thuộc trường.');
+    const code = makeClassCode(db, user.school_id, name, grade);
+    const r = db.run('INSERT INTO classes (school_id, name, grade, teacher_id, code) VALUES (?,?,?,?,?)', user.school_id, name, grade, teacherId, code);
+    audit(user, 'class_create', `${name} (${code})`, ip);
+    return { id: Number(r.lastInsertRowid), name, grade, code };
   });
   // ---- từ kết quả đến hành động: nhóm yếu → phiếu luyện ----
   function classWeakGroups(cid, minN = 3) {
@@ -1149,7 +1172,7 @@ export function createApp(config = {}) {
     const id = Number(params.id);
     if (!teacherClassIds(user).includes(id)) fail(403, 'Bạn không phụ trách lớp này.');
     sweepExpired('AND assignment_id IN (SELECT id FROM assignments WHERE class_id = ?)', id);
-    const cls = db.get('SELECT id, name, grade FROM classes WHERE id = ?', id);
+    const cls = db.get('SELECT id, name, grade, code FROM classes WHERE id = ?', id);
     const students = db.all("SELECT id, display_name, username, xp, streak, last_active_day FROM users WHERE class_id = ? AND role = 'student' AND active = 1 ORDER BY display_name", id);
     const heat = {};
     const ev = db.all(`SELECT e.student_id, e.topic, e.level, e.score, e.at FROM evidence e JOIN users u ON u.id = e.student_id WHERE u.class_id = ? AND e.topic IS NOT NULL`, id);
@@ -1612,6 +1635,141 @@ export function createApp(config = {}) {
       review: profile.review,
       days: profile.days,
     };
+  });
+
+  // ---- lớp học sinh & tham gia bằng mã ----
+  route('GET', '/api/student/class', ['student'], ({ user }) => {
+    sweepExpired('AND student_id = ?', user.id);
+    const t = now();
+    const freshUser = db.get('SELECT class_id FROM users WHERE id = ?', user.id);
+    const classId = freshUser?.class_id;
+    if (!classId) return { class: null, assignments: [] };
+    const cls = db.get(
+      `SELECT c.id, c.name, c.grade, c.code, u.display_name teacher,
+              (SELECT COUNT(*) FROM users s WHERE s.class_id = c.id AND s.role = 'student' AND s.active = 1) students
+       FROM classes c
+       LEFT JOIN users u ON u.id = c.teacher_id
+       WHERE c.id = ? AND c.school_id = ?`,
+      classId,
+      user.school_id,
+    );
+    if (!cls) return { class: null, assignments: [] };
+    const asg = db.all(
+      `SELECT a.id, a.title, a.mode, a.open_at, a.close_at, a.duration_min, a.show_result,
+              t.id attempt_id, t.status, t.score10, t.deadline_at, t.started_at, t.submitted_at
+       FROM assignments a
+       LEFT JOIN attempts t ON t.assignment_id = a.id AND t.student_id = ?
+       WHERE a.class_id = ? AND (a.target_json IS NULL OR EXISTS (SELECT 1 FROM json_each(a.target_json) j WHERE j.value = ?))
+       ORDER BY a.open_at DESC`,
+      user.id,
+      classId,
+      user.id,
+    );
+    const items = asg.map((a) => ({
+      ...a,
+      score10: a.status && a.status !== 'in_progress' && (a.show_result === 'after_submit' || t > a.close_at) ? a.score10 : null,
+      state: a.status && a.status !== 'in_progress' ? 'done' : a.status === 'in_progress' ? 'doing' : t < a.open_at ? 'upcoming' : t > a.close_at ? 'missed' : 'open',
+    }));
+    return { class: cls, assignments: items };
+  });
+
+  route('POST', '/api/student/class/join', ['student'], ({ user, body, ip }) => {
+    const raw = String(body.code ?? '').trim();
+    if (!raw) fail(400, 'Vui lòng nhập mã lớp học.');
+    const code = raw.toUpperCase();
+    const cls = db.get(
+      `SELECT c.id, c.name, c.grade, c.code, u.display_name teacher
+       FROM classes c
+       LEFT JOIN users u ON u.id = c.teacher_id
+       WHERE UPPER(c.code) = ? AND c.school_id = ?`,
+      code,
+      user.school_id,
+    );
+    if (!cls) fail(404, 'Mã lớp không hợp lệ hoặc không tìm thấy lớp trong trường.');
+    db.run('UPDATE users SET class_id = ? WHERE id = ?', cls.id, user.id);
+    audit(user, 'class_join', `${cls.name} (${cls.code})`, ip);
+    const updated = db.get('SELECT * FROM users WHERE id = ?', user.id);
+    return { ok: true, class: cls, user: publicUser(updated) };
+  });
+
+  route('POST', '/api/student/class/leave', ['student'], ({ user, ip }) => {
+    const u = db.get('SELECT class_id FROM users WHERE id = ?', user.id);
+    if (u?.class_id) {
+      const cls = db.get('SELECT name, code FROM classes WHERE id = ?', u.class_id);
+      db.run('UPDATE users SET class_id = NULL WHERE id = ?', user.id);
+      audit(user, 'class_leave', cls ? `${cls.name} (${cls.code})` : 'Rời lớp', ip);
+    }
+    const updated = db.get('SELECT * FROM users WHERE id = ?', user.id);
+    return { ok: true, user: publicUser(updated) };
+  });
+
+  // ---- tự luyện đề (kho đề khảo sát năng lực 2026) ----
+  route('GET', '/api/student/practice-exams', ['student'], ({ user }) => {
+    const rows = db.all(
+      `SELECT e.id, e.title, e.duration_min, e.blueprint_json, e.items_json, e.dept, e.created_at, u.display_name author
+       FROM exams e
+       LEFT JOIN users u ON u.id = e.created_by
+       WHERE e.school_id = ? AND (e.visibility = 'school' OR e.visibility IS NULL)
+       ORDER BY e.id DESC`,
+      user.school_id,
+    );
+    const attempts = db.all(
+      `SELECT id, title, score10, status, started_at, submitted_at
+       FROM attempts
+       WHERE student_id = ? AND kind = 'practice'
+       ORDER BY started_at DESC`,
+      user.id,
+    );
+    const attemptByTitle = {};
+    for (const att of attempts) {
+      if (!attemptByTitle[att.title]) attemptByTitle[att.title] = att;
+    }
+    const exams = rows.map((e) => {
+      const items = e.items ?? [];
+      const blueprint = e.blueprint ?? {};
+      const subject = e.dept || 'Toán';
+      const att = attemptByTitle[e.title] ?? null;
+      const qCount = items.length || (blueprint.counts ? (blueprint.counts.mcq || 0) + (blueprint.counts.tf || 0) + (blueprint.counts.short || 0) : 0) || 22;
+      return {
+        id: e.id,
+        title: e.title,
+        subject,
+        durationMin: e.duration_min || blueprint.durationMin || 90,
+        questionCount: qCount,
+        author: e.author,
+        completed: !!(att && att.status && att.status !== 'in_progress'),
+        score10: att?.score10 ?? null,
+        attemptId: att?.id ?? null,
+      };
+    });
+    const completedCount = exams.filter((x) => x.completed).length;
+    return {
+      exams,
+      totalCount: exams.length,
+      completedCount,
+    };
+  });
+
+  route('POST', '/api/student/practice-exams/start', ['student'], ({ user, body, ip }) => {
+    const examId = Number(body.examId);
+    if (!examId) fail(400, 'Thiếu mã đề thi.');
+    const exam = db.get('SELECT * FROM exams WHERE id = ? AND school_id = ?', examId, user.school_id);
+    if (!exam) fail(404, 'Không tìm thấy đề thi.');
+    const t = now();
+    const items = exam.items && exam.items.length ? exam.items : [];
+    if (!items.length) fail(400, 'Đề thi chưa có câu hỏi.');
+    const layout = makeVariant(items, `pe-${user.id}-${exam.id}-${t}`);
+    const r = db.run(
+      'INSERT INTO attempts (school_id, student_id, kind, title, layout_json, started_at) VALUES (?,?,?,?,?,?)',
+      user.school_id,
+      user.id,
+      'practice',
+      exam.title,
+      JSON.stringify(layout),
+      t,
+    );
+    audit(user, 'practice_exam_start', `Đề #${exam.id}: ${exam.title}`, ip);
+    return attemptView(getAttempt(Number(r.lastInsertRowid)));
   });
   // Chỉ dữ liệu của chính học sinh đang đăng nhập (không nhận mã học sinh từ đường dẫn).
   route('GET', '/api/student/progress', ['student'], ({ user }) => {

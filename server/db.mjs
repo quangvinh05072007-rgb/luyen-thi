@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE TABLE IF NOT EXISTS classes (
   id INTEGER PRIMARY KEY, school_id INTEGER NOT NULL REFERENCES schools(id), name TEXT NOT NULL,
-  grade INTEGER NOT NULL, teacher_id INTEGER REFERENCES users(id)
+  grade INTEGER NOT NULL, teacher_id INTEGER REFERENCES users(id), code TEXT
 );
 CREATE TABLE IF NOT EXISTS questions (
   id INTEGER PRIMARY KEY, school_id INTEGER NOT NULL REFERENCES schools(id),
@@ -128,6 +128,7 @@ const ADDED_COLUMNS = [
   ['audit_log', 'new_json', 'TEXT'],
   ['audit_log', 'reason', 'TEXT'],
   ['audit_log', 'outcome', "TEXT NOT NULL DEFAULT 'ok'"],
+  ['classes', 'code', 'TEXT'],
 ];
 
 export function migrate(db) {
@@ -141,6 +142,13 @@ export function migrate(db) {
   // Mục ôn cũ chỉ có due_at (ms): suy ra ngày đến hạn theo lịch Việt Nam.
   const upd = db.prepare('UPDATE review_items SET due_day = ? WHERE student_id = ? AND qid = ?');
   for (const r of db.prepare('SELECT student_id, qid, due_at FROM review_items WHERE due_day IS NULL').all()) upd.run(vnDay(r.due_at), r.student_id, r.qid);
+  // Lớp cũ chưa có mã tham gia: tự sinh mã dễ nhớ (VD: 12A1-8842).
+  const missingCode = db.prepare("SELECT id, name FROM classes WHERE code IS NULL OR code = ''").all();
+  const updCode = db.prepare('UPDATE classes SET code = ? WHERE id = ?');
+  for (const c of missingCode) {
+    const prefix = String(c.name || 'LOP').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'LOP';
+    updCode.run(`${prefix}-${1000 + (c.id * 137) % 9000}`, c.id);
+  }
 }
 
 const JSON_COLS = /_json$/;

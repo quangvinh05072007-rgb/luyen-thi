@@ -8,7 +8,7 @@ import { PeriodicReports } from './PeriodicReports';
 
 type ClassTab = 'students' | 'work' | 'results' | 'settings';
 export function ClassWorkspace({ id, tab = 'students', assignmentId }: { id: number; tab?: ClassTab; assignmentId?: number }) {
-  const { user } = useApp();
+  const { user, toast } = useApp();
   const { query } = useRoute();
   const { data, error, loading, reload } = useAsync(() => get(`/api/classes/${id}`), [id]);
   const [search, setSearch] = useState('');
@@ -41,10 +41,31 @@ export function ClassWorkspace({ id, tab = 'students', assignmentId }: { id: num
           ← Danh sách lớp
         </a>
         <header className="row between wrap" style={{ gap: 12 }}>
-          <div className="row" style={{ gap: 12, alignItems: 'center' }}>
-            <h1 style={{ margin: 0 }}>Lớp {data.class.name}</h1>
-            <span className="badge blue">Khối {data.class.grade}</span>
-            <span className="badge">👥 {data.students.length} học sinh</span>
+          <div className="stack" style={{ gap: 6 }}>
+            <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+              <h1 style={{ margin: 0 }}>Lớp {data.class.name}</h1>
+              <span className="badge blue">Khối {data.class.grade}</span>
+              <span className="badge">👥 {data.students.length} học sinh</span>
+            </div>
+            {data.class.code && (
+              <div className="row" style={{ gap: 8, alignItems: 'center', marginTop: 2 }}>
+                <span className="tiny" style={{ color: '#4b5563' }}>Mã tham gia lớp:</span>
+                <span className="badge blue" style={{ fontSize: 13, letterSpacing: '0.5px', padding: '3px 8px' }}>
+                  {data.class.code}
+                </span>
+                <button
+                  type="button"
+                  className="btn sm"
+                  style={{ padding: '2px 8px', height: 'auto', fontSize: 12 }}
+                  onClick={() => {
+                    navigator.clipboard?.writeText(data.class.code);
+                    toast(`Đã chép mã lớp ${data.class.code}`);
+                  }}
+                >
+                  📋 Sao chép mã cho học sinh
+                </button>
+              </div>
+            )}
           </div>
           <a className="btn primary" href={`#/thu-vien?classId=${id}`}>
             + Giao bài cho lớp

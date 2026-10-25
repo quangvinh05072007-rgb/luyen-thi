@@ -4,8 +4,8 @@ import { Progress } from './Progress';
 import { MyAppeals } from './MyAppeals';
 
 const TABS: [string, string, string][] = [
-  ['results', 'Kết quả', '/ket-qua'],
-  ['progress', 'Tiến bộ', '/tien-bo'],
+  ['results', 'Bảng điểm & Bài làm', '/ket-qua'],
+  ['progress', 'Radar năng lực & Sổ lỗi sai', '/tien-bo'],
   ['appeals', 'Khiếu nại', '/khieu-nai'],
 ];
 

@@ -1,34 +1,111 @@
 import { useState } from 'react';
-import { get } from '../../api';
-import { ErrorBox, Icon, Loading, useApp, useAsync } from '../../ui/kit';
+import { get, post } from '../../api';
+import { ErrorBox, Icon, Loading, Modal, useApp, useAsync } from '../../ui/kit';
 
-type ClassRow = { id: number; name: string; grade: number; teacher: string | null; students: number };
+type ClassRow = { id: number; name: string; grade: number; teacher: string | null; students: number; code?: string };
 
 export function Classes() {
-  const { user } = useApp();
+  const { user, toast } = useApp();
   const { data, error, loading, reload } = useAsync(() => get<{ classes: ClassRow[] }>('/api/classes'), []);
   const [search, setSearch] = useState('');
   const [grade, setGrade] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newGrade, setNewGrade] = useState(12);
+  const [busy, setBusy] = useState(false);
+  const [createErr, setCreateErr] = useState<string | null>(null);
+
   const classes = data?.classes ?? [];
   const filtered = classes.filter(
     (c) =>
       (!grade || c.grade === Number(grade)) &&
-      `${c.name} ${c.teacher ?? ''}`.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi'))
+      `${c.name} ${c.teacher ?? ''} ${c.code ?? ''}`.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi'))
   );
   const totalStudents = classes.reduce((sum, c) => sum + c.students, 0);
 
+  const handleCreateClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim()) {
+      setCreateErr('Vui lòng nhập tên lớp.');
+      return;
+    }
+    setBusy(true);
+    setCreateErr(null);
+    try {
+      const res = await post<{ id: number; name: string; grade: number; code: string }>('/api/classes', {
+        name: newName.trim(),
+        grade: newGrade,
+      });
+      toast(`Đã tạo lớp ${res.name} (Mã: ${res.code})`);
+      setShowCreate(false);
+      setNewName('');
+      reload();
+    } catch (err: any) {
+      setCreateErr(err.message || 'Không thể tạo lớp học');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="stack">
-      <div className="row between">
+      <div className="row between wrap" style={{ gap: 12 }}>
         <div>
           <h1 style={{ margin: 0 }}>Lớp học</h1>
         </div>
-        {user.role === 'admin' && (
-          <a className="btn" href="#/nguoi-dung">
-            <Icon name="gear" /> Quản lý lớp & tài khoản
-          </a>
-        )}
+        <div className="row" style={{ gap: 8 }}>
+          <button type="button" className="btn primary" onClick={() => setShowCreate(true)}>
+            <Icon name="plus" /> Tạo lớp mới
+          </button>
+          {user.role === 'admin' && (
+            <a className="btn" href="#/nguoi-dung">
+              <Icon name="user" /> Quản lý tài khoản
+            </a>
+          )}
+        </div>
       </div>
+
+      {showCreate && (
+        <Modal title="Tạo lớp học mới" onClose={() => setShowCreate(false)}>
+          <form onSubmit={handleCreateClass} className="stack" style={{ gap: 14 }}>
+            {createErr && <div className="card warn small">{createErr}</div>}
+            <label className="field">
+              <span>Tên lớp</span>
+              <input
+                className="input"
+                placeholder="VD: 12A1, 11B2, 10C3…"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                autoFocus
+                required
+              />
+            </label>
+            <label className="field">
+              <span>Khối lớp</span>
+              <select
+                className="select"
+                value={newGrade}
+                onChange={(e) => setNewGrade(Number(e.target.value))}
+              >
+                <option value={10}>Khối 10</option>
+                <option value={11}>Khối 11</option>
+                <option value={12}>Khối 12</option>
+              </select>
+            </label>
+            <p className="tiny muted">
+              Hệ thống sẽ tự động tạo một <strong>Mã tham gia lớp</strong> duy nhất (VD: {newName.trim().slice(0, 4).toUpperCase() || '12A1'}-XXXX) để học sinh tự nhập mã vào lớp.
+            </p>
+            <div className="row end" style={{ gap: 8, marginTop: 8 }}>
+              <button type="button" className="btn" onClick={() => setShowCreate(false)} disabled={busy}>
+                Hủy
+              </button>
+              <button type="submit" className="btn primary" disabled={busy}>
+                {busy ? 'Đang tạo…' : 'Tạo lớp ngay'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {loading && <Loading text="Đang tải lớp học…" />}
       {error && <ErrorBox error={error} onRetry={reload} />}
@@ -93,7 +170,7 @@ export function Classes() {
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Tìm tên lớp hoặc giáo viên…"
+                placeholder="Tìm tên lớp, mã lớp hoặc giáo viên…"
               />
             </div>
           </div>
@@ -111,6 +188,37 @@ export function Classes() {
                       </h2>
                       <span className="badge blue">Khối {c.grade}</span>
                     </div>
+
+                    {c.code && (
+                      <div
+                        className="row between"
+                        style={{
+                          padding: '6px 10px',
+                          background: '#f0f5ff',
+                          border: '1px dashed #adc6ff',
+                          borderRadius: 6,
+                          fontSize: 12,
+                          alignItems: 'center',
+                          margin: '4px 0',
+                        }}
+                      >
+                        <span style={{ color: '#1d39c4' }}>
+                          Mã lớp: <strong>{c.code}</strong>
+                        </span>
+                        <button
+                          type="button"
+                          className="btn sm"
+                          style={{ padding: '2px 8px', height: 'auto', fontSize: 11 }}
+                          onClick={() => {
+                            navigator.clipboard?.writeText(c.code!);
+                            toast(`Đã sao chép mã ${c.code}`);
+                          }}
+                        >
+                          📋 Sao chép
+                        </button>
+                      </div>
+                    )}
+
                     <div className="class-tile-chips">
                       <span className="class-tile-chip">
                         👥 {c.students} học sinh
@@ -137,11 +245,7 @@ export function Classes() {
           ) : (
             <div className="card empty">
               <h2>Chưa có lớp học</h2>
-              <p>
-                {user.role === 'admin'
-                  ? 'Vào Quản lý lớp và tài khoản để tạo lớp mới.'
-                  : 'Liên hệ quản lý trường để được phân công lớp.'}
-              </p>
+              <p>Bấm vào nút "Tạo lớp mới" ở trên để tạo lớp và nhận mã tham gia cho học sinh.</p>
             </div>
           )}
         </>

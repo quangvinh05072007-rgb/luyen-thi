@@ -58,8 +58,9 @@ export function seedSample(app) {
     const teachers = { 'gv.lan': addUser('teacher', 'gv.lan', 'Cô Nguyễn Thị Lan'), 'gv.minh': addUser('teacher', 'gv.minh', 'Thầy Trần Văn Minh') };
     const classes = {};
     for (const c of CLASSES) {
-      const cid = Number(db.run('INSERT INTO classes (school_id, name, grade, teacher_id) VALUES (?,?,?,?)', school, c.name, c.grade, teachers[c.teacher]).lastInsertRowid);
-      classes[c.name] = { id: cid, students: c.students.map((n) => ({ id: addUser('student', `hs.${slug(n)}`, n, cid), name: n })) };
+      const code = `${c.name}-2026`;
+      const cid = Number(db.run('INSERT INTO classes (school_id, name, grade, teacher_id, code) VALUES (?,?,?,?,?)', school, c.name, c.grade, teachers[c.teacher], code).lastInsertRowid);
+      classes[c.name] = { id: cid, code, students: c.students.map((n) => ({ id: addUser('student', `hs.${slug(n)}`, n, cid), name: n })) };
     }
     const qids = SAMPLE_QUESTIONS.map((q) =>
       Number(
@@ -91,13 +92,13 @@ export function seedSample(app) {
   // ---- lịch sử mô phỏng ----
   const pool = db.all('SELECT id, type, topic, level, status FROM questions WHERE school_id = ?', ids.school);
   const qmap = Object.fromEntries(db.all('SELECT * FROM questions WHERE school_id = ?', ids.school).map((r) => [r.id, { id: r.id, type: r.type, stem: r.stem, options: r.options, answer: r.answer, explanation: r.explanation, topic: r.topic, level: r.level, source: r.source, status: r.status, distractors: r.distractors }]));
-  const makeExam = (title, blueprint, by, at) => {
+  const makeExam = (title, blueprint, by, at, dept = 'Toán') => {
     const g = generateExam(pool, { ...blueprint, seed: title });
     const items = g.items.map(({ qid, type, topic, level }) => ({ qid, type, topic, level }));
     const snap = Object.fromEntries(items.map((x) => [x.qid, qmap[x.qid]]));
     const variants = [0, 1, 2, 3].map((i) => ({ code: String(101 + i), seed: `${title}-${i}` }));
     return Number(
-      db.run('INSERT INTO exams (school_id, title, blueprint_json, items_json, duration_min, variants_json, snapshot_json, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)', ids.school, title, JSON.stringify(blueprint), JSON.stringify(items), blueprint.durationMin ?? 90, JSON.stringify(variants), JSON.stringify(snap), by, at).lastInsertRowid,
+      db.run('INSERT INTO exams (school_id, title, blueprint_json, items_json, duration_min, variants_json, snapshot_json, created_by, created_at, dept) VALUES (?,?,?,?,?,?,?,?,?,?)', ids.school, title, JSON.stringify(blueprint), JSON.stringify(items), blueprint.durationMin ?? 90, JSON.stringify(variants), JSON.stringify(snap), by, at, dept).lastInsertRowid,
     );
   };
   const assign = (examId, classId, title, mode, openAt, closeAt, duration, by) =>
@@ -144,11 +145,17 @@ export function seedSample(app) {
   simulate(a3, ex2, ids.classes['12A1'].students, t0 - 7 * DAY, profile12A1);
 
   // Bài đang mở (thật, chưa ai làm) để chạy thử luồng thi.
-  const ex3 = makeExam('Đề luyện thi tốt nghiệp số 1', { counts: { mcq: 12, tf: 4, short: 6 }, levels: { 1: 40, 2: 30, 3: 30 }, topics: [], durationMin: 90 }, lan, t0 - DAY);
-  assign(ex3, ids.classes['12A1'].id, 'Đề luyện thi tốt nghiệp số 1', 'exam', t0 - 3600000, t0 + 14 * DAY, 90, lan);
-  assign(ex3, ids.classes['12A2'].id, 'Đề luyện thi tốt nghiệp số 1', 'exam', t0 - 3600000, t0 + 14 * DAY, 90, minh);
-  const ex4 = makeExam('Bài tập: Mũ, lôgarit và đạo hàm', { counts: { mcq: 5, tf: 1, short: 2 }, levels: { 1: 50, 2: 30, 3: 20 }, topics: ['T11.MULOG', 'T11.DAOHAM'], durationMin: 30 }, minh, t0 - DAY);
-  assign(ex4, ids.classes['11B1'].id, 'Bài tập: Mũ, lôgarit và đạo hàm', 'homework', t0 - 3600000, t0 + 7 * DAY, 30, minh);
+  const ex3 = makeExam('Đề Khảo Sát Năng Lực Toán 12 – Cấu Trúc Đề Mới 2026', { counts: { mcq: 12, tf: 4, short: 6 }, levels: { 1: 40, 2: 30, 3: 30 }, topics: [], durationMin: 90 }, lan, t0 - DAY, 'Toán');
+  assign(ex3, ids.classes['12A1'].id, 'Đề Khảo Sát Năng Lực Toán 12 – Cấu Trúc Đề Mới 2026', 'exam', t0 - 3600000, t0 + 14 * DAY, 90, lan);
+  assign(ex3, ids.classes['12A2'].id, 'Đề Khảo Sát Năng Lực Toán 12 – Cấu Trúc Đề Mới 2026', 'exam', t0 - 3600000, t0 + 14 * DAY, 90, minh);
+  const ex4 = makeExam('Bài Tập Về Nhà Tuần 3: Ôn Tập Khảo Sát Hàm Số & Oxyz', { counts: { mcq: 5, tf: 1, short: 2 }, levels: { 1: 50, 2: 30, 3: 20 }, topics: ['T11.MULOG', 'T11.DAOHAM'], durationMin: 30 }, minh, t0 - DAY, 'Toán');
+  assign(ex4, ids.classes['11B1'].id, 'Bài Tập Về Nhà Tuần 3: Ôn Tập Khảo Sát Hàm Số & Oxyz', 'homework', t0 - 3600000, t0 + 7 * DAY, 30, minh);
+
+  // Đề tự luyện các môn (khảo sát năng lực chuẩn 2026)
+  makeExam('Đề Khảo Sát Năng Lực Vật Lí 12 – Khí Lí Tưởng & Dao Động', { counts: { mcq: 4, tf: 1, short: 1 }, levels: { 1: 50, 2: 50 }, topics: [], durationMin: 50 }, minh, t0 - 2 * DAY, 'Vật lí');
+  makeExam('Đề Thi Thử Tốt Nghiệp THPT Hóa Học – Ester, Lipid & Pin Điện', { counts: { mcq: 4, tf: 1, short: 1 }, levels: { 1: 50, 2: 50 }, topics: [], durationMin: 50 }, lan, t0 - 2 * DAY, 'Hóa học');
+  makeExam('Đề Luyện Thi Sinh Học 12 – Di Truyền Phân Tử & Mã Di Truyền', { counts: { mcq: 4, tf: 1, short: 1 }, levels: { 1: 50, 2: 50 }, topics: [], durationMin: 50 }, lan, t0 - 3 * DAY, 'Sinh học');
+  makeExam('Đề Khảo Sát Tiếng Anh THPT – Chuyên Đề Đảo Ngữ & Ngữ Pháp', { counts: { mcq: 4, tf: 1, short: 1 }, levels: { 1: 50, 2: 50 }, topics: [], durationMin: 50 }, minh, t0 - 3 * DAY, 'Tiếng Anh');
   // Lịch sử mô phỏng không tính vào chuỗi ngày học của hôm nay.
   db.run("UPDATE users SET streak = 0, last_active_day = NULL WHERE role = 'student'");
   db.run('INSERT INTO audit_log (school_id, user_id, action, detail, at) VALUES (?,?,?,?,?)', ids.school, null, 'seed', 'Tạo trường mẫu và lịch sử mô phỏng', t0);

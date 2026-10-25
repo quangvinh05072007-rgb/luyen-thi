@@ -1,175 +1,329 @@
 import { useState } from 'react';
 import { get, post } from '../../api';
-import { Bar, ErrorBox, go, Loading, Mascot, useApp, useAsync } from '../../ui/kit';
+import { ErrorBox, fmtScore, go, Loading, useApp, useAsync } from '../../ui/kit';
+
+type PracticeExam = {
+  id: number;
+  title: string;
+  subject: string;
+  durationMin: number;
+  questionCount: number;
+  author: string | null;
+  completed: boolean;
+  score10: number | null;
+  attemptId: number | null;
+};
+
+type PracticeResponse = {
+  exams: PracticeExam[];
+  totalCount: number;
+  completedCount: number;
+};
+
+const SUBJECT_CONFIG: Record<string, { icon: string; bg: string; color: string; tagBg: string; tagColor: string }> = {
+  'Toán': { icon: '📐', bg: '#e6f4ff', color: '#1677ff', tagBg: '#f0f5ff', tagColor: '#1d39c4' },
+  'Vật lí': { icon: '⚡', bg: '#f9f0ff', color: '#722ed1', tagBg: '#f9f0ff', tagColor: '#531dab' },
+  'Hóa học': { icon: '🧪', bg: '#e6fffb', color: '#13c2c2', tagBg: '#e6fffb', tagColor: '#08979c' },
+  'Tiếng Anh': { icon: '🇬🇧', bg: '#fff0f6', color: '#eb2f96', tagBg: '#fff0f6', tagColor: '#c41d7f' },
+  'Sinh học': { icon: '🧬', bg: '#f6ffed', color: '#52c41a', tagBg: '#f6ffed', tagColor: '#389e0d' },
+  'Lịch sử': { icon: '🏛️', bg: '#fffbe6', color: '#faad14', tagBg: '#fffbe6', tagColor: '#d48806' },
+};
 
 export function PracticeHub() {
-  const { meta, user, toast } = useApp();
-  const { data, error, loading, reload } = useAsync(() => get('/api/student/home'), []);
-  const [picked, setPicked] = useState<string[]>([]);
-  const [count, setCount] = useState(8);
-  const [busy, setBusy] = useState(false);
-  if (loading) return <Loading />;
+  const { toast } = useApp();
+  const { data, error, loading, reload } = useAsync(() => get<PracticeResponse>('/api/student/practice-exams'), []);
+  const [selectedSubject, setSelectedSubject] = useState<string>('all');
+  const [search, setSearch] = useState<string>('');
+  const [startingId, setStartingId] = useState<number | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+
+  if (loading) return <Loading text="Đang tải danh mục đề luyện thi…" />;
   if (error) return <ErrorBox error={error} onRetry={reload} />;
-  const start = async (body: any) => {
-    setBusy(true);
+
+  const exams = data?.exams ?? [];
+  const completedCount = data?.completedCount ?? 0;
+  const totalCount = data?.totalCount ?? exams.length;
+
+  const subjects = ['all', ...Array.from(new Set(exams.map((e) => e.subject)))];
+
+  const filteredExams = exams.filter((e) => {
+    const matchSubject = selectedSubject === 'all' || e.subject === selectedSubject;
+    const matchSearch = !search.trim() || e.title.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi'));
+    return matchSubject && matchSearch;
+  });
+
+  const startExam = async (examId: number) => {
+    setStartingId(examId);
     try {
-      const a = await post('/api/practice/start', body);
-      go(`/thi/${a.id}`);
-    } catch (e: any) {
-      toast(e.message);
-      setBusy(false);
+      const att = await post<any>('/api/student/practice-exams/start', { examId });
+      go(`/thi/${att.id}`);
+    } catch (err: any) {
+      toast(err.message || 'Không thể bắt đầu luyện đề.');
+      setStartingId(null);
     }
   };
-  const mastery = Object.fromEntries(data.mastery.map((m: any) => [m.topic, m]));
-  const grade = user.class?.grade ?? 12;
-  const topics = meta.topics.filter((t) => t.grade <= grade).sort((a, b) => b.grade - a.grade);
-  const toggle = (c: string) => setPicked((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]));
+
+  const startAdaptiveAI = async () => {
+    setAiBusy(true);
+    try {
+      const att = await post<any>('/api/practice/start', { mode: 'weak', count: 10 });
+      go(`/thi/${att.id}`);
+    } catch (err: any) {
+      toast(err.message || 'Chưa đủ dữ liệu để khởi tạo luyện AI.');
+      setAiBusy(false);
+    }
+  };
+
   return (
-    <div className="stack">
-      <div className="stat-widget-grid">
-        <div className="stat-widget">
-          <div className="stat-widget-icon orange">
-            <span style={{ fontSize: 20 }}>🔥</span>
-          </div>
-          <div className="stat-widget-info">
-            <span className="stat-widget-num">{data.streak?.current ?? 0}</span>
-            <span className="stat-widget-label">Ngày học liên tiếp</span>
-          </div>
-        </div>
-        <div className="stat-widget">
-          <div className="stat-widget-icon red" style={{ background: '#fff1f0', color: '#ff4d4f' }}>
-            <span style={{ fontSize: 20 }}>📑</span>
-          </div>
-          <div className="stat-widget-info">
-            <span className="stat-widget-num">{data.review.due}</span>
-            <span className="stat-widget-label">Câu đến hạn ôn</span>
-          </div>
-        </div>
-        <div className="stat-widget">
-          <div className="stat-widget-icon blue">
-            <span style={{ fontSize: 20 }}>📚</span>
-          </div>
-          <div className="stat-widget-info">
-            <span className="stat-widget-num">{data.review.total}</span>
-            <span className="stat-widget-label">Tổng câu trong sổ lỗi</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid-2">
-        <div className="widget-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="row between" style={{ alignItems: 'flex-start' }}>
-            <div>
-              <span className="badge blue" style={{ marginBottom: 4 }}>Đề xuất AI</span>
-              <h2 style={{ margin: '4px 0 0', fontSize: 17 }}>Luyện phần còn yếu</h2>
+    <div className="stack" style={{ gap: 20 }}>
+      {/* Golden Banner Matching User Reference */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #fffbe6 0%, #fff1b8 100%)',
+          border: '1px solid #ffe58f',
+          borderRadius: 16,
+          padding: '20px 24px',
+          boxShadow: '0 4px 16px rgba(250, 140, 22, 0.08)',
+        }}
+      >
+        <div className="row between wrap" style={{ gap: 16, alignItems: 'center' }}>
+          <div className="row" style={{ gap: 16, alignItems: 'center' }}>
+            <div
+              style={{
+                width: 54,
+                height: 54,
+                borderRadius: 14,
+                background: '#ff7a45',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 26,
+                flexShrink: 0,
+                boxShadow: '0 4px 12px rgba(255, 122, 69, 0.3)',
+              }}
+            >
+              📖
             </div>
-            <span style={{ fontSize: 28 }}>🎯</span>
-          </div>
-          <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-            <span className="tiny muted">Số câu:</span>
-            <div className="filter-pills">
-              {[5, 8, 10, 15].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  className={`filter-pill ${count === n ? 'active' : ''}`}
-                  onClick={() => setCount(n)}
+            <div>
+              <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#873800' }}>
+                  Tự Luyện Đề 2026
+                </h1>
+                <span
+                  style={{
+                    background: '#fff7e6',
+                    border: '1px solid #ffd591',
+                    color: '#d46b08',
+                    padding: '3px 10px',
+                    borderRadius: 20,
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
                 >
-                  {n} câu
-                </button>
-              ))}
+                  {totalCount} đề thi
+                </span>
+              </div>
+              <div style={{ marginTop: 6, fontSize: 13, color: '#ad4e00', fontWeight: 500 }}>
+                Đã hoàn thành: <strong>{completedCount}/{totalCount} đề</strong> · Chuẩn ma trận 3 Phần (TN Nhiều Lựa Chọn · Đúng/Sai · Điền Số)
+              </div>
             </div>
           </div>
-          <button
-            className="btn primary block"
-            style={{ marginTop: 'auto' }}
-            disabled={busy}
-            onClick={() => start({ mode: 'weak', count })}
-          >
-            Bắt đầu luyện {count} câu →
-          </button>
-        </div>
 
-        <div className="widget-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="row between" style={{ alignItems: 'flex-start' }}>
-            <div>
-              <span className="badge" style={{ marginBottom: 4, background: '#fff1f0', color: '#cf1322' }}>
-                Lặp lại ngắt quãng
-              </span>
-              <h2 style={{ margin: '4px 0 0', fontSize: 17 }}>Sổ lỗi sai</h2>
-            </div>
-            <span style={{ fontSize: 28 }}>🔁</span>
-          </div>
-          <div className="row tiny muted">
-            <span>{data.review.due} câu cần ôn tập hôm nay · {data.review.total} câu đã lưu</span>
-          </div>
           <button
-            className="btn block"
-            style={{ marginTop: 'auto', background: data.review.due > 0 ? '#fa8c16' : undefined, color: data.review.due > 0 ? '#fff' : undefined, borderColor: data.review.due > 0 ? '#fa8c16' : undefined }}
-            disabled={busy || data.review.due === 0}
-            onClick={() => start({ mode: 'review', count: 10 })}
+            type="button"
+            className="btn"
+            style={{
+              background: 'linear-gradient(135deg, #ff7a45 0%, #fa541c 100%)',
+              color: '#fff',
+              border: 'none',
+              fontWeight: 700,
+              padding: '10px 18px',
+              borderRadius: 24,
+              boxShadow: '0 4px 12px rgba(250, 84, 28, 0.3)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+            disabled={aiBusy}
+            onClick={startAdaptiveAI}
           >
-            {data.review.due ? `Ôn ngay ${Math.min(10, data.review.due)} câu đến hạn →` : 'Chưa có câu đến hạn hôm nay'}
+            {aiBusy ? 'Đang tạo…' : '✨ Luyện thích ứng AI'}
           </button>
         </div>
       </div>
 
-      <div className="widget-card stack">
-        <div className="widget-head">
-          <h2 className="widget-title">
-            <span>📖</span> Tự chọn chuyên đề luyện tập
-          </h2>
-          <span className="badge">{picked.length} đã chọn</span>
+      {/* Filter and Search Bar */}
+      <div className="card flat row between wrap" style={{ padding: '12px 18px', gap: 14, alignItems: 'center' }}>
+        <div className="filter-pills" style={{ flexWrap: 'wrap', gap: 6 }}>
+          {subjects.map((subj) => {
+            const isAll = subj === 'all';
+            const label = isAll ? '✨ Tất cả' : `${SUBJECT_CONFIG[subj]?.icon || '📚'} ${subj}`;
+            const isActive = selectedSubject === subj;
+            return (
+              <button
+                type="button"
+                key={subj}
+                className={`filter-pill ${isActive ? 'active' : ''}`}
+                style={isActive ? { background: '#ff7a45', borderColor: '#ff7a45', color: '#fff' } : {}}
+                onClick={() => setSelectedSubject(subj)}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
-        <div className="grid-2" style={{ gap: 10 }}>
-          {topics.map((t) => {
-            const m = mastery[t.code];
-            const isSelected = picked.includes(t.code);
+
+        <div style={{ flex: '1 1 240px', maxWidth: 320 }}>
+          <input
+            className="input"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="🔍 Tìm tên đề thi…"
+            style={{ borderRadius: 20, padding: '7px 14px' }}
+          />
+        </div>
+      </div>
+
+      {/* Exam Cards List */}
+      {filteredExams.length === 0 ? (
+        <div className="card empty" style={{ padding: '40px 20px', textAlign: 'center' }}>
+          <span style={{ fontSize: 36, display: 'block', marginBottom: 8 }}>🔍</span>
+          <div style={{ fontWeight: 600, color: '#374151', fontSize: 16 }}>Không tìm thấy đề thi phù hợp</div>
+          <p className="tiny muted" style={{ marginTop: 4 }}>
+            Thử chọn môn học khác hoặc xóa bộ lọc tìm kiếm.
+          </p>
+        </div>
+      ) : (
+        <div className="stack" style={{ gap: 12 }}>
+          {filteredExams.map((exam) => {
+            const cfg = SUBJECT_CONFIG[exam.subject] || {
+              icon: '📚',
+              bg: '#f0f0f0',
+              color: '#595959',
+              tagBg: '#fafafa',
+              tagColor: '#595959',
+            };
+            const isStarting = startingId === exam.id;
+
             return (
               <div
-                key={t.code}
+                key={exam.id}
                 className="task-widget"
                 style={{
-                  cursor: 'pointer',
-                  borderColor: isSelected ? 'var(--primary)' : undefined,
-                  background: isSelected ? '#f0f7ff' : undefined,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 16,
+                  padding: '16px 20px',
+                  borderRadius: 14,
+                  border: '1px solid #e5e7eb',
+                  background: '#ffffff',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
                 }}
-                onClick={() => toggle(t.code)}
               >
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => toggle(t.code)}
-                  onClick={(e) => e.stopPropagation()}
-                />
+                {/* Subject Avatar Circle */}
+                <div
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: '50%',
+                    background: cfg.bg,
+                    color: cfg.color,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 24,
+                    flexShrink: 0,
+                  }}
+                >
+                  {cfg.icon}
+                </div>
+
+                {/* Exam Info */}
                 <div className="grow" style={{ minWidth: 0 }}>
-                  <div className="row between" style={{ gap: 6 }}>
-                    <span style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>{t.name}</span>
-                    <span className="tiny muted">Lớp {t.grade}</span>
+                  <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
+                    <span
+                      style={{
+                        background: cfg.tagBg,
+                        color: cfg.tagColor,
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        fontSize: 11,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {exam.subject}
+                    </span>
+                    {exam.completed && (
+                      <span
+                        className="badge green"
+                        style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px' }}
+                      >
+                        ✅ Đã nộp: {exam.score10 !== null ? `${fmtScore(exam.score10)}đ` : 'Đã làm'}
+                      </span>
+                    )}
                   </div>
-                  {m ? (
-                    <div className="row" style={{ gap: 8, alignItems: 'center', marginTop: 4 }}>
-                      <div style={{ flex: 1 }}>
-                        <Bar value={m.value} />
-                      </div>
-                      <span className="tiny muted" style={{ fontWeight: 600 }}>{Math.round(m.value * 100)}%</span>
-                    </div>
-                  ) : (
-                    <div className="tiny muted" style={{ marginTop: 4 }}>Chưa có dữ liệu</div>
+
+                  <h3
+                    style={{
+                      margin: '0 0 6px',
+                      fontSize: 16,
+                      fontWeight: 700,
+                      color: '#111827',
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {exam.title}
+                  </h3>
+
+                  <div className="row tiny muted" style={{ gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span>⏱️ {exam.durationMin} phút</span>
+                    <span>📝 {exam.questionCount} câu</span>
+                    <span>🎯 Chuẩn BGD 3 Phần</span>
+                    {exam.author && <span>👤 Tác giả: {exam.author}</span>}
+                  </div>
+                </div>
+
+                {/* Action Button */}
+                <div className="row" style={{ gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                  {exam.completed && exam.attemptId && (
+                    <a
+                      className="btn sm"
+                      href={`#/ket-qua/${exam.attemptId}`}
+                      style={{ borderRadius: 20, padding: '6px 14px' }}
+                    >
+                      Xem bài làm
+                    </a>
                   )}
+
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{
+                      background: 'linear-gradient(135deg, #ff7a45 0%, #fa541c 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 24,
+                      padding: '8px 20px',
+                      fontWeight: 700,
+                      fontSize: 13,
+                      boxShadow: '0 3px 10px rgba(250, 84, 28, 0.25)',
+                      cursor: 'pointer',
+                    }}
+                    disabled={isStarting}
+                    onClick={() => startExam(exam.id)}
+                  >
+                    {isStarting ? 'Đang vào…' : exam.completed ? 'Luyện lại >' : 'Luyện ngay >'}
+                  </button>
                 </div>
               </div>
             );
           })}
         </div>
-        <button
-          className="btn primary block mt"
-          disabled={busy || !picked.length}
-          onClick={() => start({ mode: 'topic', topics: picked, count })}
-        >
-          {picked.length ? `Luyện ${count} câu (${picked.length} chuyên đề đã chọn) →` : 'Chọn ít nhất một chuyên đề ở trên để bắt đầu'}
-        </button>
-      </div>
+      )}
     </div>
   );
 }
