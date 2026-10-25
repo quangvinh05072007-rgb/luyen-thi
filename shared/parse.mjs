@@ -203,7 +203,7 @@ function showAnswer(type, v) {
   return String(v);
 }
 
-function sameAnswer(type, a, b) {
+export function sameAnswer(type, a, b) {
   if (type === 'tf') return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => x === b[i]);
   if (type === 'short') {
     const [x, y] = [parseNumber(a), parseNumber(b)];
@@ -316,4 +316,23 @@ export function parseExamText(input) {
   }
   if (!questions.length) warnings.push('Không tìm thấy câu nào. Mỗi câu cần bắt đầu bằng "Câu 1.", "Câu 2." …');
   return { questions, keyEntries, warnings };
+}
+
+
+/** Đổi một đoạn "đáp án" (chữ) về đúng dạng của loại câu; không hiểu được → null. */
+export function parseAnswerLine(type, raw) {
+  const text = String(raw ?? '').replace(/\$/g, '').replace(/^\s*(?:là|bằng)\s+/i, '').trim();
+  if (!text) return null;
+  const kv = parseKeyValue(text.replace(/^Chọn\s*/i, '').replace(/[.。]\s*$/, ''));
+  if (type === 'mcq') return kv.kind === 'mcq' ? kv.value : null;
+  if (type === 'tf') return parseTfTokens(text);
+  if (type === 'short') return kv.kind === 'short' ? kv.value : null;
+  return null;
+}
+
+/** Đáp án mà lời giải (do AI viết) kết luận: dòng "Đáp án: …" cuối cùng. */
+export function answerFromSolution(type, solution) {
+  const all = [...String(solution ?? '').matchAll(/^\s*(?:\*\*)?Đáp\s*án\s*(?:\*\*)?\s*[:.]\s*(?:\*\*)?\s*(.+)$/gimu)];
+  if (!all.length) return null;
+  return parseAnswerLine(type, all[all.length - 1][1]);
 }

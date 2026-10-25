@@ -5,7 +5,7 @@ import path from 'node:path';
 import { openDb, toQuestion } from './db.mjs';
 import { hashPassword, verifyPassword, verifyPasswordAsync, newToken, tempPassword, LoginLimiter, parseCookies } from './security.mjs';
 import { importFile, importText, answerFileToText, answerEntriesFromText, tagDrafts } from './importers.mjs';
-import { applyAnswerEntries } from '../shared/parse.mjs';
+import { applyAnswerEntries, answerFromSolution, sameAnswer } from '../shared/parse.mjs';
 import { makeAi } from './ai.mjs';
 import { gradeAttempt, gradeQuestion } from '../shared/grading.mjs';
 import { vnDay, scheduleReview, startOfDayMs, isDue, overdueDays } from '../shared/spaced.mjs';
@@ -13,7 +13,7 @@ import { buildProgress } from '../shared/progress.mjs';
 import crypto from 'node:crypto';
 import { buildXlsx } from '../shared/xlsxWrite.mjs';
 import { hashSeed } from '../shared/rng.mjs';
-import { generateExam, makeVariant, makeVariants, variantLayout, assignVariants, toOriginalResponse, OFFICIAL_BLUEPRINT } from '../shared/generate.mjs';
+import { generateExam, apportion, makeVariant, makeVariants, variantLayout, assignVariants, toOriginalResponse, OFFICIAL_BLUEPRINT } from '../shared/generate.mjs';
 import { diagnoseAttempt, diagnoseItem, computeMastery, recommend, selectPractice } from '../shared/diagnose.mjs';
 import { examToDocx, crossAnswerKey } from '../shared/exportExam.mjs';
 import { TOPICS, TOPIC_BY_CODE, LEVELS, SOURCES, SOURCE_HINT, ERROR_TYPES, QUESTION_TYPES } from '../shared/topics.mjs';
@@ -156,6 +156,9 @@ export function createApp(config = {}) {
     const rows = db.all(`SELECT * FROM questions WHERE school_id = ? AND id IN (${ids.map(() => '?').join(',')})`, schoolId, ...ids);
     return Object.fromEntries(rows.map((r) => [r.id, toQuestion(r)]));
   }
+
+  /** Học sinh được giao bài (bài giao cho cả lớp thì target = null). */
+  const targeted = (a, students) => (Array.isArray(a.target) ? students.filter((s) => a.target.includes(s.id)) : students);
 
   function teacherClassIds(user) {
     if (user.role === 'admin') return db.all('SELECT id FROM classes WHERE school_id = ?', user.school_id).map((c) => c.id);
@@ -475,7 +478,7 @@ export function createApp(config = {}) {
     if (query.source) (where.push('source = ?'), p.push(query.source));
     if (query.level) (where.push('level = ?'), p.push(Number(query.level)));
     if (query.q) (where.push('stem LIKE ?'), p.push(`%${query.q}%`));
-    const rows = db.all(`SELECT * FROM questions WHERE ${where.join(' AND ')} ORDER BY status = 'draft' DESC, updated_at DESC LIMIT 500`, ...p).map(toQuestion);
+    const rows = db.all(`SELECT * FROM questions WHERE ${where.join(' AND ')} ORDER BY status = 'draft' DESC, updated_at DESC LIMIT 500`, ...p).map((r) => ({ ...toQuestion(r), explanationDraft: r.explanation_draft ?? null, draftCheck: r.draft_check ?? null }));
     const usage = db.all('SELECT qid, COUNT(*) n, AVG(score) p FROM evidence WHERE school_id = ? GROUP BY qid', user.school_id);
     const um = Object.fromEntries(usage.map((u) => [u.qid, u]));
     const counts = db.all("SELECT status, COUNT(*) n FROM questions WHERE school_id = ? AND status != 'archived' GROUP BY status", user.school_id);
@@ -657,13 +660,44 @@ export function createApp(config = {}) {
     audit(user, 'ai_similar', `#${q.id} → #${id}`, ip);
     return { id };
   });
+  // AI chỉ viết NHÁP lời giải: nằm riêng, học sinh không thấy, giáo viên phải duyệt. AI tự giải độc lập
+  // và kết luận đáp án nào thì so với đáp án đã duyệt — lệch thì cảnh báo, không cho duyệt nếu không xác nhận.
   route('POST', '/api/ai/explain', STAFF, async ({ user, body, ip }) => {
-    const q = toQuestion(db.get('SELECT * FROM questions WHERE id = ? AND school_id = ?', body.id, user.school_id));
-    if (!q) fail(404, 'Không tìm thấy câu hỏi.');
-    const explanation = await ai.explain(q);
-    const id = insertQuestion(user, { ...q, explanation }, 'ai_modified', 'draft', { parent_id: q.id, origin: `AI viết lời giải cho câu #${q.id}` });
-    audit(user, 'ai_explain', `#${q.id} → #${id}`, ip);
-    return { id };
+    const row = db.get('SELECT * FROM questions WHERE id = ? AND school_id = ?', body.id, user.school_id);
+    if (!row) fail(404, 'Không tìm thấy câu hỏi.');
+    const q = toQuestion(row);
+    const draft = await ai.explain(q);
+    const aiAnswer = answerFromSolution(q.type, draft);
+    const matches = aiAnswer === null || q.answer === null || q.answer === undefined ? null : sameAnswer(q.type, q.answer, aiAnswer);
+    const check = { aiAnswer, matches, at: now(), model: ai.model ?? null };
+    db.run('UPDATE questions SET explanation_draft = ?, draft_check_json = ? WHERE id = ?', draft, JSON.stringify(check), q.id);
+    audit(user, 'ai_explain', `#${q.id}${matches === false ? ' — AI ra đáp án khác đáp án đã duyệt' : ''}`, ip, { target: `question:${q.id}`, new: { check } });
+    return { draft, check };
+  });
+  route('POST', '/api/questions/:id/draft/approve', STAFF, ({ user, params, body, ip }) => {
+    const row = db.get('SELECT * FROM questions WHERE id = ?', params.id);
+    if (!row) fail(404, 'Không tìm thấy câu hỏi.');
+    const target = `question:${row.id}`;
+    if (row.school_id !== user.school_id) deny(user, 'explanation_approve', target, 'Câu hỏi không thuộc trường của bạn.', ip);
+    if (!row.explanation_draft) fail(400, 'Câu này không có lời giải nháp.');
+    if (row.draft_check?.matches === false && body.confirmMismatch !== true) {
+      fail(409, 'AI tự giải ra đáp án khác đáp án đã duyệt của câu này. Kiểm tra lại đáp án hoặc lời giải, rồi xác nhận nếu vẫn muốn dùng.', { mismatch: true, aiAnswer: row.draft_check.aiAnswer });
+    }
+    const text = body.text !== undefined ? String(body.text).trim() : row.explanation_draft;
+    if (!text) fail(400, 'Lời giải trống.');
+    recordVersion(row, user, 'Duyệt lời giải do AI viết');
+    db.run('UPDATE questions SET explanation = ?, explanation_draft = NULL, draft_check_json = NULL, updated_at = ? WHERE id = ?', text, now(), row.id);
+    audit(user, 'explanation_approve', `#${row.id}${body.text !== undefined ? ' (đã sửa tay)' : ''}`, ip, { target, old: { explanation: row.explanation }, new: { explanation: text }, reason: row.draft_check?.matches === false ? 'Giáo viên xác nhận dù AI ra đáp án khác' : undefined });
+    return { ok: true };
+  });
+  route('POST', '/api/questions/:id/draft/reject', STAFF, ({ user, params, ip }) => {
+    const row = db.get('SELECT * FROM questions WHERE id = ?', params.id);
+    if (!row) fail(404, 'Không tìm thấy câu hỏi.');
+    const target = `question:${row.id}`;
+    if (row.school_id !== user.school_id) deny(user, 'explanation_reject', target, 'Câu hỏi không thuộc trường của bạn.', ip);
+    db.run('UPDATE questions SET explanation_draft = NULL, draft_check_json = NULL WHERE id = ?', row.id);
+    audit(user, 'explanation_reject', `#${row.id}`, ip, { target });
+    return { ok: true };
   });
 
   // ---- đề thi ----
@@ -882,6 +916,94 @@ export function createApp(config = {}) {
     );
     return { classes: rows };
   });
+  // ---- từ kết quả đến hành động: nhóm yếu → phiếu luyện ----
+  function classWeakGroups(cid, minN = 3) {
+    const students = db.all("SELECT id, display_name FROM users WHERE class_id = ? AND role = 'student' AND active = 1 ORDER BY display_name", cid);
+    const ev = db.all('SELECT e.student_id, e.topic, e.level, e.score, e.at FROM evidence e JOIN users u ON u.id = e.student_id WHERE u.class_id = ? AND e.topic IS NOT NULL', cid);
+    const byStudent = {};
+    for (const e of ev) (byStudent[e.student_id] ??= []).push(e);
+    const groups = {};
+    for (const s of students) {
+      for (const m of Object.values(computeMastery(byStudent[s.id] ?? [], now()))) {
+        if (m.n >= minN && m.value < 0.5) (groups[m.topic] ??= []).push({ id: s.id, name: s.display_name, value: m.value, n: m.n });
+      }
+    }
+    return Object.entries(groups)
+      .map(([topic, list]) => ({ topic, name: TOPIC_BY_CODE[topic]?.name ?? topic, students: list.sort((x, y) => x.value - y.value) }))
+      .sort((x, y) => y.students.length - x.students.length || x.topic.localeCompare(y.topic));
+  }
+  route('GET', '/api/classes/:id/weak-groups', STAFF, ({ user, params }) => {
+    const cid = Number(params.id);
+    if (!teacherClassIds(user).includes(cid)) fail(404, 'Không tìm thấy lớp.');
+    return { groups: classWeakGroups(cid) };
+  });
+  route('POST', '/api/classes/:id/practice-assignment', STAFF, ({ user, params, body, ip }) => {
+    const cid = Number(params.id);
+    const target = `class:${cid}`;
+    const cls = db.get('SELECT * FROM classes WHERE id = ?', cid);
+    if (!cls) fail(404, 'Không tìm thấy lớp.');
+    if (cls.school_id !== user.school_id) deny(user, 'practice_assign', target, 'Lớp không thuộc trường của bạn.', ip);
+    if (!teacherClassIds(user).includes(cid)) deny(user, 'practice_assign', target, 'Bạn không phụ trách lớp này.', ip);
+    const topic = String(body.topic ?? '');
+    if (!TOPIC_BY_CODE[topic]) fail(400, 'Chọn chuyên đề.');
+    const classStudents = db.all("SELECT id FROM users WHERE class_id = ? AND role = 'student' AND active = 1", cid).map((r) => r.id);
+    let ids;
+    if (Array.isArray(body.studentIds) && body.studentIds.length) {
+      ids = [...new Set(body.studentIds.map(Number))];
+      if (ids.some((id) => !classStudents.includes(id))) fail(400, 'Có học sinh không thuộc lớp này.');
+    } else {
+      ids = (classWeakGroups(cid).find((g) => g.topic === topic)?.students ?? []).map((s) => s.id);
+    }
+    if (!ids.length) fail(400, 'Chưa có học sinh nào yếu chuyên đề này (cần ít nhất 3 câu đã làm). Chọn học sinh thủ công.');
+    const count = Math.min(30, Math.max(3, Math.floor(Number(body.count) || 10)));
+    const pool = db.all("SELECT id, type, topic, level, status FROM questions WHERE school_id = ? AND status = 'approved' AND topic = ?", user.school_id, topic);
+    if (!pool.length) fail(400, 'Ngân hàng chưa có câu đã duyệt cho chuyên đề này.');
+    const avail = { mcq: 0, tf: 0, short: 0 };
+    for (const q of pool) avail[q.type]++;
+    const want = apportion(count, { mcq: avail.mcq ? 6 : 0, tf: avail.tf ? 1.5 : 0, short: avail.short ? 2.5 : 0 });
+    const counts = Object.fromEntries(Object.keys(avail).map((t) => [t, Math.min(avail[t], want[t] ?? 0)]));
+    // Ưu tiên câu các em này chưa làm
+    const done = db.all(`SELECT DISTINCT qid FROM evidence WHERE student_id IN (${ids.map(() => '?').join(',')})`, ...ids).map((r) => r.qid);
+    const res = generateExam(pool, { counts, levels: { 1: 40, 2: 40, 3: 20 }, topics: [topic], avoidIds: done, seed: `${user.id}-${now()}` });
+    if (!res.items.length) fail(400, 'Không chọn được câu nào cho phiếu luyện.');
+    const qmap = questionsMap(user.school_id, res.items.map((x) => x.qid));
+    const items = res.items.map((x) => ({ qid: x.qid, type: x.type, topic: x.topic, level: x.level, group: qmap[x.qid].group_id ?? null }));
+    const title = String(body.title ?? '').trim() || `Phiếu luyện: ${TOPIC_BY_CODE[topic].name}`;
+    const variants = makeVariants(items, 1, `${user.id}-${now()}`);
+    const closeAt = now() + Math.min(30, Math.max(1, Number(body.days) || 7)) * 86400000;
+    const out = db.tx(() => {
+      const examId = Number(
+        db
+          .run('INSERT INTO exams (school_id, title, blueprint_json, items_json, duration_min, variants_json, snapshot_json, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)', user.school_id, title, JSON.stringify({ counts, topic }), JSON.stringify(items), 45, JSON.stringify(variants), JSON.stringify(qmap), user.id, now())
+          .lastInsertRowid,
+      );
+      const assignmentId = Number(
+        db
+          .run(
+            'INSERT INTO assignments (school_id, exam_id, class_id, mode, title, open_at, close_at, duration_min, show_result, created_by, created_at, variant_mode, variant_map_json, target_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            user.school_id,
+            examId,
+            cid,
+            'homework',
+            title,
+            now(),
+            closeAt,
+            45,
+            'after_submit',
+            user.id,
+            now(),
+            'random',
+            JSON.stringify(Object.fromEntries(ids.map((id) => [id, variants[0].code]))),
+            JSON.stringify(ids),
+          )
+          .lastInsertRowid,
+      );
+      return { examId, assignmentId };
+    });
+    audit(user, 'practice_assign', `${ids.length} học sinh, ${items.length} câu, ${TOPIC_BY_CODE[topic].name}`, ip, { target: `assignment:${out.assignmentId}`, new: { topic, students: ids, items: items.length } });
+    return { ...out, students: ids.length, items: items.length, warnings: res.warnings, shortages: res.shortages };
+  });
+
   route('GET', '/api/classes/:id', STAFF, ({ user, params }) => {
     const id = Number(params.id);
     if (!teacherClassIds(user).includes(id)) fail(403, 'Bạn không phụ trách lớp này.');
@@ -958,7 +1080,7 @@ export function createApp(config = {}) {
   route('GET', '/api/assignments/:id/variants', STAFF, ({ user, params }) => {
     const a = db.get('SELECT * FROM assignments WHERE id = ? AND school_id = ?', params.id, user.school_id);
     if (!a || !teacherClassIds(user).includes(a.class_id)) fail(404, 'Không tìm thấy bài giao.');
-    const students = db.all("SELECT id, display_name FROM users WHERE class_id = ? AND role = 'student' AND active = 1 ORDER BY display_name", a.class_id);
+    const students = targeted(a, db.all("SELECT id, display_name FROM users WHERE class_id = ? AND role = 'student' AND active = 1 ORDER BY display_name", a.class_id));
     return { mode: a.variant_mode, students: students.map((s) => ({ id: s.id, name: s.display_name, code: a.variant_map?.[s.id] ?? null })) };
   });
   route('GET', '/api/assignments', STAFF, ({ user }) => {
@@ -980,7 +1102,7 @@ export function createApp(config = {}) {
     if (!a || !teacherClassIds(user).includes(a.class_id)) fail(404, 'Không tìm thấy bài giao.');
     sweepExpired('AND assignment_id = ?', a.id);
     const exam = db.get('SELECT * FROM exams WHERE id = ?', a.exam_id);
-    const students = db.all("SELECT id, display_name FROM users WHERE class_id = ? AND role = 'student' AND active = 1 ORDER BY display_name", a.class_id);
+    const students = targeted(a, db.all("SELECT id, display_name FROM users WHERE class_id = ? AND role = 'student' AND active = 1 ORDER BY display_name", a.class_id));
     const atts = db.all('SELECT * FROM attempts WHERE assignment_id = ?', a.id);
     const byStudent = Object.fromEntries(atts.map((t) => [t.student_id, t]));
     const done = atts.filter((t) => t.status !== 'in_progress');
@@ -1137,7 +1259,7 @@ export function createApp(config = {}) {
     if (!teacherClassIds(user).includes(a.class_id)) deny(user, 'data_export', target, 'Bạn không phụ trách lớp này.', ip);
     sweepExpired('AND assignment_id = ?', a.id);
     const cls = db.get('SELECT name FROM classes WHERE id = ?', a.class_id);
-    const rows = db.all("SELECT u.display_name, u.username, t.variant_code, t.status, t.score10, t.submitted_at FROM users u LEFT JOIN attempts t ON t.student_id = u.id AND t.assignment_id = ? WHERE u.class_id = ? AND u.role = 'student' AND u.active = 1 ORDER BY u.display_name", a.id, a.class_id);
+    const rows = targeted(a, db.all("SELECT u.id, u.display_name, u.username, t.variant_code, t.status, t.score10, t.submitted_at FROM users u LEFT JOIN attempts t ON t.student_id = u.id AND t.assignment_id = ? WHERE u.class_id = ? AND u.role = 'student' AND u.active = 1 ORDER BY u.display_name", a.id, a.class_id));
     const table = rows.map((r) => {
       const done = r.status && r.status !== 'in_progress';
       return [r.display_name, r.username, r.variant_code ?? '', STATUS_VI[r.status] ?? 'Chưa làm', done ? r.score10 : '', done && r.submitted_at ? fmtVn(r.submitted_at) : ''];
@@ -1209,9 +1331,10 @@ export function createApp(config = {}) {
     const t = now();
     const asg = db.all(
       `SELECT a.id, a.title, a.mode, a.open_at, a.close_at, a.duration_min, a.show_result, t.id attempt_id, t.status, t.score10, t.deadline_at
-       FROM assignments a LEFT JOIN attempts t ON t.assignment_id = a.id AND t.student_id = ? WHERE a.class_id = ? ORDER BY a.close_at ASC`,
+       FROM assignments a LEFT JOIN attempts t ON t.assignment_id = a.id AND t.student_id = ? WHERE a.class_id = ? AND (a.target_json IS NULL OR EXISTS (SELECT 1 FROM json_each(a.target_json) j WHERE j.value = ?)) ORDER BY a.close_at ASC`,
       user.id,
       user.class_id ?? -1,
+      user.id,
     );
     const items = asg.map((a) => ({
       ...a,
@@ -1245,7 +1368,7 @@ export function createApp(config = {}) {
   });
   route('POST', '/api/attempts/start', ['student'], ({ user, body, ip }) => {
     const a = db.get('SELECT * FROM assignments WHERE id = ? AND school_id = ?', body.assignmentId, user.school_id);
-    if (!a || a.class_id !== user.class_id) fail(404, 'Không tìm thấy bài được giao.');
+    if (!a || a.class_id !== user.class_id || (Array.isArray(a.target) && !a.target.includes(user.id))) fail(404, 'Không tìm thấy bài được giao.');
     const existing = db.get('SELECT * FROM attempts WHERE assignment_id = ? AND student_id = ?', a.id, user.id);
     if (existing) return attemptView(finalizeIfExpired(existing));
     const t = now();

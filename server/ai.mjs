@@ -46,8 +46,8 @@ Với tf: options là 4 mệnh đề a)–d), answer là mảng 4 giá trị đ�
     async explain(q) {
       return (
         await call(
-          `Viết lời giải từng bước cho câu sau, cuối cùng nêu đáp án. Nếu là trắc nghiệm, giải thích ngắn vì sao mỗi phương án sai là sai.
-${JSON.stringify({ type: q.type, stem: q.stem, options: q.options, answer: q.answer })}`,
+          `Viết lời giải từng bước (đánh số Bước 1, Bước 2, …) cho câu sau. Nếu là trắc nghiệm, giải thích ngắn vì sao mỗi phương án còn lại sai (nêu kiểu lỗi học sinh hay mắc). KẾT THÚC bằng đúng một dòng "Đáp án: X" (X là A/B/C/D; với đúng/sai viết ĐSĐS; với trả lời ngắn viết số). Hãy tự giải độc lập, không suy ra từ đáp án cho sẵn.
+${JSON.stringify({ type: q.type, stem: q.stem, options: q.options })}`,
           1500,
         )
       ).trim();

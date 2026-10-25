@@ -1,4 +1,5 @@
-import { get } from '../../api';
+import { useState } from 'react';
+import { get, post } from '../../api';
 import { Bar, ErrorBox, ErrorTypeBadge, fmtDateTime, fmtScore, Loading, pct, scoreColor, useApp, useAsync } from '../../ui/kit';
 import { AttemptReview, ResultSummary } from '../student/Result';
 
@@ -10,8 +11,23 @@ function heatColor(v: number | undefined) {
 }
 
 export function ClassView({ id }: { id: number }) {
-  const { meta } = useApp();
+  const { meta, toast } = useApp();
   const { data, error, loading, reload } = useAsync(() => get(`/api/classes/${id}`), [id]);
+  const weak = useAsync(() => get(`/api/classes/${id}/weak-groups`), [id]);
+  const [assigning, setAssigning] = useState<string | null>(null);
+  const assignPractice = async (topic: string, name: string, n: number) => {
+    if (!confirm(`Giao phiếu luyện "${name}" cho ${n} em yếu chuyên đề này? Các em khác trong lớp sẽ không thấy bài.`)) return;
+    setAssigning(topic);
+    try {
+      const r = await post(`/api/classes/${id}/practice-assignment`, { topic });
+      toast(`Đã giao phiếu ${r.items} câu cho ${r.students} học sinh.`);
+      reload();
+    } catch (e: any) {
+      toast(e.message);
+    } finally {
+      setAssigning(null);
+    }
+  };
   if (loading) return <Loading />;
   if (error) return <ErrorBox error={error} onRetry={reload} />;
   const topics: string[] = data.classMastery.map((m: any) => m.topic);
@@ -30,6 +46,23 @@ export function ClassView({ id }: { id: number }) {
           {data.actions.map((a: any, i: number) => (
             <div key={i} className="alert info mb small">
               {a.text}
+            </div>
+          ))}
+        </div>
+      )}
+      {weak.data?.groups?.length > 0 && (
+        <div className="card">
+          <h2>Nhóm cần hỗ trợ</h2>
+          <p className="small muted">Học sinh có năng lực dưới 50% ở chuyên đề (đã làm ít nhất 3 câu). Giao một phiếu luyện đúng chuyên đề cho riêng nhóm đó.</p>
+          {weak.data.groups.slice(0, 6).map((g: any) => (
+            <div key={g.topic} className="list-item">
+              <div className="grow">
+                <div className="strong small">{g.name}</div>
+                <div className="tiny muted">{g.students.map((s: any) => `${s.name} (${Math.round(s.value * 100)}%)`).join(', ')}</div>
+              </div>
+              <button className="btn sm" disabled={assigning === g.topic} onClick={() => assignPractice(g.topic, g.name, g.students.length)}>
+                Giao phiếu luyện ({g.students.length} em)
+              </button>
             </div>
           ))}
         </div>

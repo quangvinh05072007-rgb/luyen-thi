@@ -4,7 +4,7 @@ import { MathText } from '../../ui/MathText';
 import { ErrorBox, LevelBadge, Loading, Modal, SourceBadge, topicName, TypeBadge, useApp, useAsync } from '../../ui/kit';
 import { Draft, QuestionEditor } from '../../ui/QuestionEditor';
 
-export function QuestionCard({ q, selected, onSelect, onEdit, actions }: { q: any; selected?: boolean; onSelect?: () => void; onEdit?: () => void; actions?: React.ReactNode }) {
+export function QuestionCard({ q, selected, onSelect, onEdit, actions, onDraft }: { q: any; selected?: boolean; onSelect?: () => void; onEdit?: () => void; actions?: React.ReactNode; onDraft?: (action: 'approve' | 'reject', confirmMismatch?: boolean) => void }) {
   const { meta } = useApp();
   return (
     <div className="card flat" style={selected ? { borderColor: 'var(--primary)', background: 'var(--primary-soft)' } : undefined}>
@@ -41,6 +41,24 @@ export function QuestionCard({ q, selected, onSelect, onEdit, actions }: { q: an
       )}
       {q.type === 'short' && <div className="small mt">Đáp án: <b>{String(q.answer ?? '—')}</b></div>}
       {q.problems?.length > 0 && <div className="alert warn small mt">Cần sửa trước khi duyệt: {q.problems.join(' ')}</div>}
+      {q.explanationDraft && (
+        <div className={`alert ${q.draftCheck?.matches === false ? 'error' : 'info'} small mt`}>
+          <div className="strong">Lời giải nháp do AI viết — học sinh chưa thấy cho đến khi bạn duyệt</div>
+          {q.draftCheck?.matches === false && <div>AI tự giải ra đáp án khác đáp án đã duyệt của câu này. Kiểm tra lại đáp án hoặc lời giải trước khi dùng.</div>}
+          {q.draftCheck?.matches === true && <div>AI tự giải ra cùng đáp án với đáp án đã duyệt.</div>}
+          <MathText as="div" text={q.explanationDraft} />
+          {onDraft && (
+            <div className="row mt">
+              <button className="btn good sm" onClick={() => onDraft('approve', q.draftCheck?.matches === false)}>
+                {q.draftCheck?.matches === false ? 'Vẫn dùng lời giải này' : 'Duyệt lời giải'}
+              </button>
+              <button className="btn ghost sm" onClick={() => onDraft('reject')}>
+                Bỏ nháp
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {(onEdit || actions) && (
         <div className="row mt">
           {onEdit && (
@@ -114,12 +132,22 @@ export function Bank() {
     setBusy(true);
     try {
       const r = await post(`/api/ai/${kind}`, { id });
-      toast(`AI đã tạo câu nháp #${r.id}. Kiểm tra rồi duyệt.`);
+      toast(kind === 'explain' ? 'AI đã viết lời giải nháp (ở dưới câu). Đọc kỹ rồi duyệt.' : `AI đã tạo câu nháp #${r.id}. Kiểm tra rồi duyệt.`);
       reload();
     } catch (e: any) {
       toast(e.message);
     } finally {
       setBusy(false);
+    }
+  };
+  const draftAction = async (id: number, action: 'approve' | 'reject', confirmMismatch?: boolean) => {
+    if (action === 'approve' && confirmMismatch && !confirm('AI giải ra đáp án khác đáp án đã duyệt. Bạn chắc chắn lời giải này đúng?')) return;
+    try {
+      await post(`/api/questions/${id}/draft/${action}`, action === 'approve' ? { confirmMismatch: !!confirmMismatch } : {});
+      toast(action === 'approve' ? 'Đã duyệt lời giải.' : 'Đã bỏ lời giải nháp.');
+      reload();
+    } catch (e: any) {
+      toast(e.message);
     }
   };
   const saveEdit = async () => {
@@ -265,6 +293,7 @@ export function Bank() {
             q={q}
             selected={sel.includes(q.id)}
             onSelect={() => setSel((s) => (s.includes(q.id) ? s.filter((x) => x !== q.id) : [...s, q.id]))}
+            onDraft={(action, confirmMismatch) => draftAction(q.id, action, confirmMismatch)}
             onEdit={() => setEditing({ ...q })}
             actions={
               <>

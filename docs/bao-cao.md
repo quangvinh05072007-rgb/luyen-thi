@@ -195,3 +195,12 @@ Chi tiết số liệu và giới hạn ở `docs/do-chinh-xac.md`. `npm run che
 - Mục 9 (nhật ký, kiểm soát mở lại lượt thi / sửa điểm) đã làm ở nâng cấp 3.
 
 **Chưa làm / hạn chế:** giao diện chưa có màn quản lý mẫu ma trận (API sẵn sàng; trang Ra đề chưa có nút "lưu/dùng mẫu"), chưa có màn xem lịch sử phiên bản; mẫu "đề" hiểu là nhân bản đề + mẫu ma trận (chưa có kho đề mẫu dựng sẵn). Xuất Excel bảng điểm chưa kèm điểm từng phần/từng câu.
+
+## 15. Giai đoạn 3 — học thông minh (25/10/2026)
+
+`npm run check`: 127/127 test đạt (thêm `tests/learning.test.mjs`, 6 test). Các mục 11 (ôn giãn cách), 12 (luyện tập thích ứng), 14 (trang tiến bộ) đã có ở nâng cấp 2, 4 và bản trước.
+
+- **Lời giải do AI viết chỉ là NHÁP** (mục 13): `POST /api/ai/explain` không còn tạo câu mới; lời giải nháp nằm riêng (`explanation_draft`), học sinh không thấy (có test: bài làm, kết quả, đều không chứa nháp). Prompt yêu cầu giải từng bước, giải thích vì sao phương án khác sai (kiểu lỗi) và kết thúc bằng dòng "Đáp án: X"; máy đọc dòng đó và **so với đáp án đã duyệt**: lệch → cảnh báo trong giao diện, `POST /api/questions/:id/draft/approve` trả 409 trừ khi xác nhận (`confirmMismatch`), ghi nhật ký `explanation_approve` kèm lời giải cũ/mới; có thể sửa tay trước khi duyệt hoặc `draft/reject`. Duyệt lưu phiên bản lời giải cũ. Phần AI **chưa kiểm thử với khóa thật** (test dùng AI giả lập trả lời theo kịch bản).
+- **Từ kết quả đến hành động một chạm** (mục 15): `GET /api/classes/:id/weak-groups` (học sinh dưới 50% ở một chuyên đề, đã làm ≥ 3 câu) và `POST /api/classes/:id/practice-assignment` — tự chọn câu đã duyệt của chuyên đề (ưu tiên câu các em chưa làm, thiên về mức dễ/vừa), tạo đề và **bài giao chỉ cho nhóm đó** (cột `assignments.target_json`). Học sinh ngoài nhóm không thấy và không vào được; báo cáo, bảng điểm Excel và danh sách mã đề chỉ gồm các em được giao. Chỉ giáo viên phụ trách lớp; mọi lần từ chối được ghi. Trang lớp có thẻ "Nhóm cần hỗ trợ" với nút "Giao phiếu luyện"; Ngân hàng hiện lời giải nháp kèm nút Duyệt/Bỏ.
+
+**Chưa làm / hạn chế:** phiếu luyện chưa có lời nhắc/thông báo cho học sinh ngoài danh sách việc trong trang chủ; chưa có bước giáo viên xem trước/sửa phiếu trước khi giao (giao ngay); "giải thích kiểu lỗi" dùng chung lời giải AI và nhãn nhiễu sẵn có, chưa có luồng riêng cho từng kiểu lỗi.
