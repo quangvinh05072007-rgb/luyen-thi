@@ -10,21 +10,21 @@ type Snapshot = { id: number; from: string; to: string; createdAt: number; sched
 const day = (at: number) => new Date(at + 7 * 3600_000).toISOString().slice(0, 10);
 const delta = (value: number | null, percentage = false) => value === null ? 'Chưa đủ dữ liệu so sánh' : `${value > 0 ? '+' : ''}${fmtScore(percentage ? value * 100 : value)} ${percentage ? 'điểm %' : 'điểm'} so với kỳ trước`;
 
-export function PeriodicReports() {
+export function PeriodicReports({ classId }: { classId?: number }) {
   const { user, toast } = useApp();
   const [from, setFrom] = useState(() => day(Date.now() - 6 * 86400_000));
   const [to, setTo] = useState(() => day(Date.now()));
-  const [selected, setSelected] = useState<number[]>([]);
-  const [filter, setFilter] = useState(() => ({ from, to, classIds: [] as number[], revision: 0 }));
+  const [selected, setSelected] = useState<number[]>(classId ? [classId] : []);
+  const [filter, setFilter] = useState(() => ({ from, to, classIds: classId ? [classId] : [] as number[], revision: 0 }));
   const [savedId, setSavedId] = useState<number | null>(null);
   const [cadence, setCadence] = useState<'weekly' | 'monthly'>('weekly');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
-  const options = useAsync(() => get<{ classes: { id: number; name: string }[] }>('/api/classes'), []);
+  const options = useAsync(async () => { const r = await get<{ classes: { id: number; name: string }[] }>('/api/classes'); return {classes:classId?r.classes.filter(c=>c.id===classId):r.classes}; }, [classId]);
   const history = useAsync(async () => {
     const [snapshots, schedules] = await Promise.all([get<{ snapshots: Snapshot[] }>('/api/reports/snapshots'), get<{ schedules: Schedule[] }>('/api/reports/schedules')]);
-    return { ...snapshots, ...schedules };
-  }, []);
+    return { snapshots: snapshots.snapshots.filter(s=>!classId||(s.classIds.length===1&&s.classIds[0]===classId)), schedules:schedules.schedules.filter(s=>!classId||(s.classIds.length===1&&s.classIds[0]===classId)) };
+  }, [classId]);
   const result = useAsync(() => get<Period>(`/api/reports/period?${new URLSearchParams({ from: filter.from, to: filter.to, ...(filter.classIds.length ? { classIds: filter.classIds.join(',') } : {}) })}`), [filter]);
   const report = result.data;
   const names = (ids: number[]) => ids.map((id) => options.data?.classes.find((c) => c.id === id)?.name ?? `Lớp #${id}`).join(', ');
@@ -45,8 +45,8 @@ export function PeriodicReports() {
   }
   return <div className="stack">
     <div>
-      <h1>Báo cáo định kỳ</h1>
-      <p className="muted">Theo dõi mức tham gia và kết quả {user.role === 'admin' ? 'trong trường' : 'các lớp phụ trách'}, so sánh với kỳ trước có cùng số ngày.</p>
+      <h2>Báo cáo định kỳ{classId ? ' của lớp' : ''}</h2>
+      <p className="muted">Theo dõi mức tham gia và kết quả {classId ? 'lớp đang mở' : user.role === 'admin' ? 'trong trường' : 'các lớp phụ trách'}, so sánh với kỳ trước có cùng số ngày.</p>
     </div>
     <form className="card stack" onSubmit={submit}>
       <div className="grid-2">
@@ -55,7 +55,7 @@ export function PeriodicReports() {
       </div>
       {options.loading && <Loading text="Đang tải danh sách lớp…" />}
       {options.error && <ErrorBox error={options.error} onRetry={options.reload} />}
-      {options.data && <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+      {!classId && options.data && <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
         <legend className="label">Lớp so sánh · bỏ chọn để xem tất cả lớp được phép</legend>
         <div className="row" style={{ flexWrap: 'wrap' }}>{options.data.classes.map((c) => <label key={c.id} className="row" style={{ minHeight: 44, gap: 8, paddingRight: 16 }}>
           <input type="checkbox" checked={selected.includes(c.id)} onChange={(e) => setSelected((ids) => e.target.checked ? [...ids, c.id] : ids.filter((id) => id !== c.id))} />{c.name}

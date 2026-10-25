@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { api, download, post } from '../../api';
 import { MathText } from '../../ui/MathText';
-import { go, LevelBadge, topicName, TypeBadge, useApp } from '../../ui/kit';
+import { go, LevelBadge, topicName, TypeBadge, useApp, useRoute } from '../../ui/kit';
 import { QuestionEditor } from '../../ui/QuestionEditor';
 
 const SAMPLE = `PHẦN I
@@ -109,7 +109,8 @@ export function ImportPage() {
     if (!saved) return;
     const r = await post('/api/questions/approve', { ids: saved });
     toast(`Đã duyệt ${r.approved.length} câu.${r.rejected.length ? ` ${r.rejected.length} câu cần sửa thêm ở Ngân hàng.` : ''}`);
-    go('/ngan-hang');
+    const cid=new URLSearchParams(location.hash.split('?')[1]??'').get('classId');
+    go(`/ngan-hang${cid&&/^\d+$/.test(cid)?`?classId=${cid}`:''}`);
   };
 
   const qs = result?.questions ?? [];

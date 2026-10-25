@@ -4,14 +4,14 @@ import { MathText } from '../../ui/MathText';
 import { AssignmentExtension, AttemptActions } from '../../ui/StaffActions';
 import { Bar, ErrorBox, ErrorTypeBadge, fmtDateTime, fmtScore, Loading, pct, scoreColor, topicName, useApp, useAsync } from '../../ui/kit';
 
-export function Assignments() {
-  const { data, error, loading, reload } = useAsync(() => get('/api/assignments'), []);
+export function Assignments({ classId, results = true }: { classId?: number; results?: boolean }) {
+  const { data, error, loading, reload } = useAsync(() => get(`/api/assignments${classId ? `?classId=${classId}` : ''}`), [classId]);
   const now = Date.now();
   return (
     <div className="stack">
       <div className="row between">
-        <h1>Kết quả bài giao</h1>
-        <a className="btn primary" href="#/de-thi">
+        <h2>{results ? 'Điểm các bài đã giao' : 'Bài đã giao cho lớp'}</h2>
+        <a className="btn primary" href={classId ? `#/thu-vien?classId=${classId}` : '#/thu-vien'}>
           Giao đề
         </a>
       </div>
@@ -27,14 +27,14 @@ export function Assignments() {
                 <th>Lớp</th>
                 <th>Trạng thái</th>
                 <th>Đã nộp</th>
-                <th className="right">TB</th>
+                {results && <th className="right">TB</th>}
               </tr>
             </thead>
             <tbody>
               {data.assignments.map((a: any) => (
-                <tr key={a.id} className="click" onClick={() => (location.hash = `/bai-giao/${a.id}`)}>
+                <tr key={a.id} className="click" onClick={() => (location.hash = classId ? `/lop/${classId}/ket-qua/${a.id}` : `/lop/${a.class_id}/ket-qua/${a.id}`)}>
                   <td>
-                    <a href={`#/bai-giao/${a.id}`}>{a.title}</a>
+                    <a href={`#/lop/${classId ?? a.class_id}/ket-qua/${a.id}`}>{a.title}</a>
                     <div className="tiny muted">{a.mode === 'exam' ? `Thi ${a.duration_min} phút` : 'Bài tập'}</div>
                   </td>
                   <td>{a.class_name}</td>
@@ -43,9 +43,9 @@ export function Assignments() {
                     {a.submitted}/{a.students}
                     {a.doing ? <span className="tiny muted"> · {a.doing} đang làm</span> : null}
                   </td>
-                  <td className="right strong" style={{ color: scoreColor(a.avg) }}>
+                  {results && <td className="right strong" style={{ color: scoreColor(a.avg) }}>
                     {fmtScore(a.avg)}
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>
@@ -58,12 +58,13 @@ export function Assignments() {
 
 const STATUS: Record<string, string> = { not_started: 'Chưa làm', in_progress: 'Đang làm', submitted: 'Đã nộp', auto_submitted: 'Tự nộp khi hết giờ' };
 
-export function Report({ id }: { id: number }) {
+export function Report({ id, classId }: { id: number; classId?: number }) {
   const { meta, toast } = useApp();
   const { data, error, loading, reload } = useAsync(() => get(`/api/assignments/${id}/report`), [id]);
   const [tab, setTab] = useState<'students' | 'items' | 'topics'>('students');
   if (loading) return <Loading />;
   if (error) return <ErrorBox error={error} onRetry={reload} />;
+  if (classId && data.assignment.classId !== classId) return <ErrorBox error="Bài này không thuộc lớp đang mở. Hãy chọn bài trong danh sách của lớp." />;
   const s = data.summary;
   const maxH = Math.max(1, ...s.hist);
   const errTotal = Object.values(data.errorCount as Record<string, number>).reduce((a, b) => a + b, 0);
@@ -81,7 +82,8 @@ export function Report({ id }: { id: number }) {
   return (
     <div className="stack">
       <div>
-        <h1>{data.assignment.title}</h1>
+        <a className="small" href={`#/lop/${data.assignment.classId}/ket-qua`}>Về kết quả lớp {data.assignment.className}</a>
+        <h2>{data.assignment.title}</h2>
         <div className="small muted">
           Lớp {data.assignment.className} · {data.assignment.mode === 'exam' ? `thi ${data.assignment.durationMin} phút` : 'bài tập'} · đóng {fmtDateTime(data.assignment.closeAt)}
         </div>

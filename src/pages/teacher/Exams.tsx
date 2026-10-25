@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { download, get, post } from '../../api';
 import { MathText } from '../../ui/MathText';
 import { Comments } from '../../ui/Comments';
-import { shareUrl, ErrorBox, fmtDate, go, LevelBadge, Loading, topicName, useApp, useAsync } from '../../ui/kit';
+import { shareUrl, ErrorBox, fmtDate, go, LevelBadge, Loading, topicName, useApp, useAsync, useRoute } from '../../ui/kit';
 
 export function Exams() {
+  const {query}=useRoute();
+  const requestedClass=query.get('classId');
+  const suffix=requestedClass&&/^\d+$/.test(requestedClass)?`?classId=${requestedClass}`:'';
   const [scope, setScope] = useState('all');
   const [search, setSearch] = useState('');
   const [dept, setDept] = useState('');
@@ -14,7 +17,7 @@ export function Exams() {
     <div className="stack">
       <div className="row between">
         <h1>Đề thi</h1>
-        <a className="btn primary" href="#/ra-de">
+        <a className="btn primary" href={`#/ra-de${suffix}`}>
           Ra đề mới
         </a>
       </div>
@@ -32,7 +35,7 @@ export function Exams() {
       {data && (
         <div className="card">
           {exams.map((e: any) => (
-            <a key={e.id} className="list-item" href={`#/de-thi/${e.id}`} style={{ color: 'inherit' }}>
+            <a key={e.id} className="list-item" href={`#/de-thi/${e.id}${suffix}`} style={{ color: 'inherit' }}>
               <div className="grow">
                 <div className="strong">{e.title}</div>
                 <div className="row tiny"><span className={`badge ${e.visibility === 'school' ? 'blue' : ''}`}>{e.visibility === 'school' ? 'Dùng chung' : 'Riêng tư'}</span>{e.mine && <span className="badge">Của bạn</span>}{e.dept && <span>{e.dept}</span>}<span>{e.ratingCount ? `${e.ratingAvg}/5 (${e.ratingCount} đánh giá)` : 'Chưa có đánh giá'} · {e.uses} lượt dùng</span></div>
@@ -55,12 +58,15 @@ const toLocal = (ms: number) => {
 };
 
 export function ExamDetail({ id }: { id: number }) {
+  const {query}=useRoute();
+  const requestedClass=Number(query.get('classId'));
+  const classSuffix=Number.isSafeInteger(requestedClass)&&requestedClass>0?`?classId=${requestedClass}`:'';
   const { meta, user, toast } = useApp();
   const { data, error, loading, reload } = useAsync(async () => {
     const [e, c] = await Promise.all([get(`/api/exams/${id}`), get('/api/classes')]);
     return { ...e, classes: c.classes };
   }, [id]);
-  const [classIds, setClassIds] = useState<number[]>([]);
+  const [classIds, setClassIds] = useState<number[]>(Number.isSafeInteger(requestedClass)&&requestedClass>0?[requestedClass]:[]);
   const [mode, setMode] = useState<'exam' | 'homework'>('exam');
   const [openAt, setOpenAt] = useState(toLocal(Date.now()));
   const [closeAt, setCloseAt] = useState(toLocal(Date.now() + 7 * 86400000));
@@ -76,13 +82,14 @@ export function ExamDetail({ id }: { id: number }) {
   if (loading) return <Loading />;
   if (error) return <ErrorBox error={error} onRetry={reload} />;
   const exam = data.exam;
+  const selectedClasses=classIds.filter(cid=>data.classes.some((c:any)=>c.id===cid));
   const assign = async () => {
     setBusy(true);
     try {
       const list = Object.fromEntries((roster.data ?? []).filter((s: any) => variantList[s.id]).map((s: any) => [s.id,variantList[s.id]]));
-      await post('/api/assignments', { examId: id, classIds, mode, variantMode, variantList:variantMode === 'list' ? list : undefined, openAt: new Date(openAt).getTime(), closeAt: new Date(closeAt).getTime(), durationMin: duration ?? exam.durationMin, showResult });
-      toast(`Đã giao đề cho ${classIds.length} lớp.`);
-      go('/bai-giao');
+      await post('/api/assignments', { examId: id, classIds:selectedClasses, mode, variantMode, variantList:variantMode === 'list' ? list : undefined, openAt: new Date(openAt).getTime(), closeAt: new Date(closeAt).getTime(), durationMin: duration ?? exam.durationMin, showResult });
+      toast(`Đã giao đề cho ${selectedClasses.length} lớp.`);
+      go(selectedClasses.length===1?`/lop/${selectedClasses[0]}/bai-giao`:'/lop-hoc');
     } catch (e: any) {
       toast(e.message);
       setBusy(false);
@@ -92,7 +99,7 @@ export function ExamDetail({ id }: { id: number }) {
   return (
     <div className="stack">
       <div>
-        <a className="small" href="#/de-thi">Về kho đề</a>
+        <a className="small" href={`#/thu-vien${classSuffix}`}>Về kho đề</a>
         <h1>{exam.title}</h1>
         <div className="small muted">
           {exam.items.length} câu · {exam.durationMin} phút · mã đề {exam.variants.join(', ')}
@@ -161,8 +168,8 @@ export function ExamDetail({ id }: { id: number }) {
         </div>
         <p className="tiny muted">Đồng hồ do máy chủ giữ; hết giờ máy chủ tự nộp bản lưu cuối. Học sinh vào địa chỉ <b>{shareUrl(meta)}</b> (cùng mạng với máy này).</p>
         <div>
-          <button className="btn primary big" disabled={busy || !classIds.length || (variantMode === 'list' && (roster.loading || !!roster.error))} onClick={assign}>
-            Giao cho {classIds.length || '…'} lớp
+          <button className="btn primary big" disabled={busy || !selectedClasses.length || (variantMode === 'list' && (roster.loading || !!roster.error))} onClick={assign}>
+            Giao cho {selectedClasses.length || '…'} lớp
           </button>
         </div>
       </div>
@@ -184,7 +191,7 @@ export function ExamDetail({ id }: { id: number }) {
               post(`/api/exams/${id}/clone`, {})
                 .then((r) => {
                   toast('Đã nhân bản đề.');
-                  go(`/de-thi/${r.id}`);
+                  go(`/de-thi/${r.id}${classSuffix}`);
                 })
                 .catch((e) => toast(e.message))
             }

@@ -180,6 +180,15 @@ export function createApp(config = {}) {
     return db.all('SELECT id FROM classes WHERE school_id = ? AND teacher_id = ?', user.school_id, user.id).map((c) => c.id);
   }
 
+  function selectedClassIds(user, value) {
+    const allowed = teacherClassIds(user);
+    if (value === undefined) return allowed;
+    if (!/^\d+$/.test(String(value)) || !Number.isSafeInteger(Number(value)) || Number(value) < 1) fail(400, 'Mã lớp không hợp lệ.');
+    const id = Number(value);
+    if (!allowed.includes(id)) fail(403, 'Bạn không phụ trách lớp này.');
+    return [id];
+  }
+
   function canSeeStudent(user, studentId) {
     if (user.role === 'student') return user.id === studentId;
     const s = db.get("SELECT * FROM users WHERE id = ? AND role = 'student' AND school_id = ?", studentId, user.school_id);
@@ -438,6 +447,7 @@ export function createApp(config = {}) {
 
   // ---- phiên ----
   route('POST', '/api/login', null, async ({ body, ip, setCookie }) => {
+    if (body.role !== undefined && !['student','teacher','admin'].includes(body.role)) fail(400, 'Chọn Học sinh, Giáo viên hoặc Quản lý trường.');
     const username = String(body.username ?? '').trim().toLowerCase();
     const key = `${username}|${ip}`;
     if (limiter.blocked(key, now())) fail(429, 'Sai mật khẩu quá nhiều lần. Đợi 10 phút rồi thử lại.');
@@ -449,6 +459,7 @@ export function createApp(config = {}) {
       fail(401, 'Sai tên đăng nhập hoặc mật khẩu.');
     }
     limiter.reset(key);
+    if (body.role && body.role !== u.role) fail(403, `Tài khoản này thuộc vai trò ${u.role === 'student' ? 'Học sinh' : u.role === 'teacher' ? 'Giáo viên' : 'Quản lý trường'}. Hãy đổi lựa chọn rồi đăng nhập lại.`);
     const token = newToken();
     db.run('INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?,?,?,?)', token, u.id, now(), now() + SESSION_MS);
     setCookie(`se_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_MS / 1000}`);
@@ -1214,8 +1225,8 @@ export function createApp(config = {}) {
     const students = targeted(a, db.all("SELECT id, display_name FROM users WHERE class_id = ? AND role = 'student' AND active = 1 ORDER BY display_name", a.class_id));
     return { mode: a.variant_mode, students: students.map((s) => ({ id: s.id, name: s.display_name, code: a.variant_map?.[s.id] ?? null })) };
   });
-  route('GET', '/api/assignments', STAFF, ({ user }) => {
-    const ids = teacherClassIds(user);
+  route('GET', '/api/assignments', STAFF, ({ user, query }) => {
+    const ids = selectedClassIds(user, query.classId);
     if (!ids.length) return { assignments: [] };
     sweepExpired(`AND assignment_id IN (SELECT id FROM assignments WHERE class_id IN (${ids.map(() => '?').join(',')}))`, ...ids);
     const rows = db.all(
@@ -1288,7 +1299,7 @@ export function createApp(config = {}) {
     for (const t of done) hist[Math.min(10, Math.floor(t.score10))]++;
     audit(user, 'report_view', `bài giao #${a.id}`, ip);
     return {
-      assignment: { id: a.id, title: a.title, mode: a.mode, className: a.class_name, openAt: a.open_at, closeAt: a.close_at, durationMin: a.duration_min, examId: a.exam_id },
+      assignment: { id: a.id, classId: a.class_id, title: a.title, mode: a.mode, className: a.class_name, openAt: a.open_at, closeAt: a.close_at, durationMin: a.duration_min, examId: a.exam_id },
       summary: {
         students: students.length,
         submitted: done.length,
@@ -1455,7 +1466,7 @@ export function createApp(config = {}) {
       .map((a) => ({ id: a.id, attemptId: a.attempt_id, qid: a.qid, title: a.title, reason: a.reason, status: a.status, note: a.note, createdAt: a.created_at, resolvedAt: a.resolved_at })),
   }));
   route('GET', '/api/appeals', STAFF, ({ user, query }) => {
-    const ids = teacherClassIds(user);
+    const ids = selectedClassIds(user, query.classId);
     if (!ids.length) return { appeals: [] };
     const rows = db.all(
       `SELECT a.id, a.attempt_id, a.qid, a.reason, a.status, a.note, a.created_at, a.resolved_at, u.display_name student, s.title, s.score10, c.name class_name
@@ -1558,6 +1569,8 @@ export function createApp(config = {}) {
     if (att.status !== 'in_progress') view.result = resultDetail(att, attemptQuestions(att));
     view.events = att.events;
     view.student = db.get('SELECT display_name FROM users WHERE id = ?', att.student_id).display_name;
+    view.classId = att.assignment_id ? db.get('SELECT class_id FROM assignments WHERE id = ?', att.assignment_id)?.class_id : db.get('SELECT class_id FROM users WHERE id = ?', att.student_id)?.class_id;
+    view.assignmentId = att.assignment_id;
     return view;
   });
   route('GET', '/api/students/:id/profile', ['admin', 'teacher', 'student'], ({ user, params, ip }) => {

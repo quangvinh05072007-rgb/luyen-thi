@@ -8,49 +8,38 @@ import { TeacherHome } from './pages/teacher/TeacherHome';
 import { Bank } from './pages/teacher/Bank';
 import { ImportPage } from './pages/teacher/Import';
 import { ExamBuilder } from './pages/teacher/ExamBuilder';
-import { Exams, ExamDetail } from './pages/teacher/Exams';
-import { Assignments, Report } from './pages/teacher/Report';
-import { ClassView, StudentProfilePage, TeacherAttemptView } from './pages/teacher/ClassView';
+import { ExamDetail } from './pages/teacher/Exams';
+import { Report } from './pages/teacher/Report';
+import { StudentProfilePage, TeacherAttemptView } from './pages/teacher/ClassView';
 import { Classes } from './pages/teacher/Classes';
 import { StudentHome } from './pages/student/StudentHome';
 import { ExamRoom } from './pages/student/ExamRoom';
 import { ResultPage } from './pages/student/Result';
 import { PracticeHub } from './pages/student/Practice';
-import { Progress } from './pages/student/Progress';
 import { AdminHome, Users, Audit } from './pages/admin/Admin';
-import { Appeals } from './pages/teacher/Appeals';
 import { PeriodicReports } from './pages/teacher/PeriodicReports';
 import { Family } from './pages/Family';
-import { MyAppeals } from './pages/student/MyAppeals';
 import { InstallApp } from './ui/InstallApp';
+import { ClassWorkspace } from './pages/teacher/ClassWorkspace';
+import { Library } from './pages/teacher/Library';
+import { StudentResults } from './pages/student/StudentResults';
 
 type Nav = { path: string; label: string; icon: string };
 const NAV: Record<User['role'], Nav[]> = {
   teacher: [
     { path: '/', label: 'Tổng quan', icon: 'home' },
     { path: '/lop-hoc', label: 'Lớp học', icon: 'class' },
-    { path: '/ngan-hang', label: 'Ngân hàng', icon: 'bank' },
-    { path: '/de-thi', label: 'Đề thi', icon: 'exam' },
-    { path: '/nhap-de', label: 'Nhập đề', icon: 'import' },
-    { path: '/bai-giao', label: 'Kết quả', icon: 'report' },
-    { path: '/khieu-nai', label: 'Khiếu nại', icon: 'log' },
-    { path: '/bao-cao', label: 'Báo cáo định kỳ', icon: 'report' },
+    { path: '/thu-vien', label: 'Đề & câu hỏi', icon: 'exam' },
   ],
   admin: [
     { path: '/', label: 'Toàn trường', icon: 'school' },
     { path: '/lop-hoc', label: 'Lớp học', icon: 'class' },
-    { path: '/nguoi-dung', label: 'Người dùng', icon: 'user' },
-    { path: '/ngan-hang', label: 'Ngân hàng', icon: 'bank' },
-    { path: '/de-thi', label: 'Đề thi', icon: 'exam' },
-    { path: '/nhat-ky', label: 'Nhật ký', icon: 'log' },
-    { path: '/bao-cao', label: 'Báo cáo định kỳ', icon: 'report' },
+    { path: '/thu-vien', label: 'Đề & câu hỏi', icon: 'exam' },
   ],
   student: [
     { path: '/', label: 'Hôm nay', icon: 'home' },
     { path: '/luyen-tap', label: 'Luyện tập', icon: 'practice' },
-    { path: '/tien-bo', label: 'Tiến bộ', icon: 'report' },
-    { path: '/khieu-nai', label: 'Khiếu nại', icon: 'log' },
-    { path: '/tai-khoan', label: 'Tài khoản', icon: 'user' },
+    { path: '/ket-qua', label: 'Kết quả & tiến bộ', icon: 'report' },
   ],
 };
 
@@ -105,23 +94,29 @@ export function App() {
           ['/thi/:id', ([id]) => <ExamRoom key={id} attemptId={Number(id)} />],
           ['/ket-qua/:id', ([id]) => <ResultPage key={id} attemptId={Number(id)} />],
           ['/luyen-tap', () => <PracticeHub />],
-          ['/tien-bo', () => <Progress />],
-          ['/khieu-nai', () => <MyAppeals />],
+          ['/ket-qua', () => <StudentResults key="results" />],
+          ['/tien-bo', () => <StudentResults key="progress" initial="progress" />],
+          ['/khieu-nai', () => <StudentResults key="appeals" initial="appeals" />],
           ['/tai-khoan', () => <Account onLogout={logout} />],
         ]
       : [
           ['/', () => (user.role === 'admin' ? <AdminHome /> : <TeacherHome />)],
-          ['/ngan-hang', () => <Bank />],
-          ['/nhap-de', () => <ImportPage />],
-          ['/ra-de', () => <ExamBuilder />],
-          ['/de-thi', () => <Exams />],
-          ['/de-thi/:id', ([id]) => <ExamDetail key={id} id={Number(id)} />],
-          ['/bai-giao', () => <Assignments />],
-          ['/khieu-nai', () => <Appeals />],
-          ['/bao-cao', () => <PeriodicReports />],
+          ['/thu-vien', () => <Library />],
+          ['/ngan-hang', () => <Library><Bank /></Library>],
+          ['/nhap-de', () => <Library><ImportPage /></Library>],
+          ['/ra-de', () => <Library><ExamBuilder /></Library>],
+          ['/de-thi', () => <Library />],
+          ['/de-thi/:id', ([id]) => <Library><ExamDetail key={id} id={Number(id)} /></Library>],
+          ['/bai-giao', () => <Classes />],
+          ['/khieu-nai', () => <Classes />],
+          ['/bao-cao', () => user.role === 'admin' ? <PeriodicReports /> : <Classes />],
           ['/lop-hoc', () => <Classes />],
           ['/bai-giao/:id', ([id]) => <Report key={id} id={Number(id)} />],
-          ['/lop/:id', ([id]) => <ClassView key={id} id={Number(id)} />],
+          ['/lop/:id', ([id]) => <ClassWorkspace key={id} id={Number(id)} />],
+          ['/lop/:id/bai-giao', ([id]) => <ClassWorkspace key={id} id={Number(id)} tab="work" />],
+          ['/lop/:id/ket-qua', ([id]) => <ClassWorkspace key={id} id={Number(id)} tab="results" />],
+          ['/lop/:id/ket-qua/:assignmentId', ([id,aid]) => <ClassWorkspace key={id} id={Number(id)} tab="results" assignmentId={Number(aid)} />],
+          ['/lop/:id/cai-dat', ([id]) => <ClassWorkspace key={id} id={Number(id)} tab="settings" />],
           ['/hoc-sinh/:id', ([id]) => <StudentProfilePage key={id} id={Number(id)} />],
           ['/bai-lam/:id', ([id]) => <TeacherAttemptView key={id} id={Number(id)} />],
           ['/nguoi-dung', () => <Users />],
@@ -140,7 +135,7 @@ export function App() {
   const inExam = path.startsWith('/thi/');
   const mobileNav = nav.length > 5 ? nav.slice(0, 4) : nav;
   const moreNav = nav.length > 5 ? [...nav.slice(4), {path:'/tai-khoan',label:'Tài khoản',icon:'user'}] : [];
-  const isActive = (p: string) => p === '/lop-hoc' ? path === p || path.startsWith('/lop/') || path.startsWith('/hoc-sinh/') : p === '/' ? path === '/' : path.startsWith(p);
+  const isActive = (p: string) => p === '/lop-hoc' ? path === p || ['/lop/','/hoc-sinh/','/bai-giao','/bai-lam/','/khieu-nai'].some(prefix=>path.startsWith(prefix)) : p === '/thu-vien' ? ['/thu-vien','/de-thi','/ngan-hang','/nhap-de','/ra-de'].some(prefix=>path.startsWith(prefix)) : p === '/ket-qua' ? ['/ket-qua','/tien-bo','/khieu-nai'].some(prefix=>path.startsWith(prefix)) : p === '/' ? path === '/' : path.startsWith(p);
 
   return (
     <AppCtx.Provider value={{ meta, user, refreshUser, toast }}>
@@ -157,17 +152,9 @@ export function App() {
               </a>
             ))}
             <div className="spacer" />
-            {user.role !== 'student' && (
-              <a href="#/tai-khoan" className={`nav ${isActive('/tai-khoan') ? 'active' : ''}`}>
-                <Icon name="user" /> Tài khoản
-              </a>
-            )}
             <div className="who">
               <div className="strong" style={{ color: 'var(--ink)' }}>{user.displayName}</div>
               <div>{user.school.name}</div>
-              <button className="btn ghost sm mt" onClick={logout}>
-                <Icon name="out" /> Đăng xuất
-              </button>
             </div>
           </aside>
         )}
@@ -179,7 +166,7 @@ export function App() {
               </a>
               <div className="grow" />
               <span className="workspace-label small muted">{{admin:'Quản lý trường',teacher:'Không gian giáo viên',student:'Không gian học tập'}[user.role]}</span>
-              <span className="badge blue">{user.displayName}</span>
+              <details className="account-menu" onKeyDown={e=>{if(e.key==='Escape')e.currentTarget.open=false;}}><summary><Icon name="user"/><span>{user.displayName}</span></summary><div className="account-options" onClick={e=>{(e.currentTarget.parentElement as HTMLDetailsElement).open=false;}}><a href="#/tai-khoan">Tài khoản</a>{user.role==='admin'&&<><a href="#/nguoi-dung">Người dùng & phân công</a><a href="#/nhat-ky">Nhật ký</a><a href="#/bao-cao">Báo cáo toàn trường</a></>}<button onClick={logout}>Đăng xuất</button></div></details>
             </div>
           )}
           {user.school.sample ? <div className="sample-banner">Bạn đang dùng <b>trường mẫu</b>: tài khoản, câu hỏi và các bài thi cũ ghi "(mô phỏng)" là dữ liệu mẫu để chạy thử.</div> : null}

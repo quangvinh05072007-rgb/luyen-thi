@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { download, get, post, put } from '../../api';
 import { MathText } from '../../ui/MathText';
-import { ErrorBox, LevelBadge, Loading, Modal, SourceBadge, topicName, TypeBadge, useApp, useAsync } from '../../ui/kit';
+import { ErrorBox, LevelBadge, Loading, Modal, SourceBadge, topicName, TypeBadge, useApp, useAsync, useRoute } from '../../ui/kit';
 import { Draft, QuestionEditor } from '../../ui/QuestionEditor';
 import { Comments } from '../../ui/Comments';
 import { QuestionHistory } from '../../ui/QuestionHistory';
@@ -77,6 +77,9 @@ export function QuestionCard({ q, selected, onSelect, onEdit, actions, onDraft }
 }
 
 export function Bank() {
+  const {query}=useRoute();
+  const requestedClass=query.get('classId');
+  const classSuffix=requestedClass&&/^\d+$/.test(requestedClass)?`?classId=${requestedClass}`:'';
   const { meta, toast, user } = useApp();
   const [f, setF] = useState({ status: 'all', type: '', topic: '', source: '', level: '', q: '' });
   const qs = useMemo(() => new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][]).toString(), [f]);
@@ -193,7 +196,7 @@ export function Bank() {
           <button className="btn" onClick={create}>
             Thêm câu
           </button>
-          <a className="btn primary" href="#/nhap-de">
+          <a className="btn primary" href={`#/nhap-de${classSuffix}`}>
             Nhập từ file
           </a>
         </div>

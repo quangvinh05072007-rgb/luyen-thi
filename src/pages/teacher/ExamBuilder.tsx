@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, get, post } from '../../api';
 import { MathText } from '../../ui/MathText';
-import { ErrorBox, go, LevelBadge, Modal, SourceBadge, topicName, useApp, useAsync } from '../../ui/kit';
+import { ErrorBox, go, LevelBadge, Modal, SourceBadge, topicName, useApp, useAsync, useRoute } from '../../ui/kit';
 
 const PRESETS = {
   official: { label: 'Đề tốt nghiệp chuẩn', counts: { mcq: 12, tf: 4, short: 6 }, levels: { 1: 40, 2: 30, 3: 30 }, durationMin: 90 },
@@ -11,6 +11,7 @@ const PRESETS = {
 type Bp = { counts: Record<string, number>; levels: Record<string, number>; durationMin: number; topics: string[] };
 
 export function ExamBuilder() {
+  const {query}=useRoute();
   const { meta, toast } = useApp();
   const [preset, setPreset] = useState<keyof typeof PRESETS | 'custom'>('official');
   const [bp, setBp] = useState<Bp>({ ...PRESETS.official, topics: [] });
@@ -67,7 +68,8 @@ export function ExamBuilder() {
     try {
       const r = await post('/api/exams', { title, items: gen.items, durationMin: bp.durationMin, variants, blueprint: bp });
       toast('Đã lưu đề. Giờ giao cho lớp hoặc xuất Word.');
-      go(`/de-thi/${r.id}`);
+      const cid=query.get('classId');
+      go(`/de-thi/${r.id}${cid&&/^\d+$/.test(cid)?`?classId=${cid}`:''}`);
     } catch (e: any) {
       toast(e.message);
       setBusy(false);

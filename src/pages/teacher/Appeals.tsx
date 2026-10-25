@@ -3,9 +3,9 @@ import { ErrorBox, fmtDateTime, fmtScore, Loading, useApp, useAsync } from '../.
 
 const STATUS: Record<string, string> = { open: 'Chờ xử lý', accepted: 'Đã chấp nhận', rejected: 'Đã từ chối' };
 
-export function Appeals() {
+export function Appeals({ classId }: { classId?: number }) {
   const { toast } = useApp();
-  const { data, error, loading, reload } = useAsync(() => get('/api/appeals'), []);
+  const { data, error, loading, reload } = useAsync(() => get(`/api/appeals${classId ? `?classId=${classId}` : ''}`), [classId]);
   if (loading) return <Loading />;
   if (error) return <ErrorBox error={error} onRetry={reload} />;
   const resolve = async (a: any, decision: 'accept' | 'reject') => {
@@ -31,7 +31,7 @@ export function Appeals() {
   return (
     <div className="stack">
       <div>
-        <h1>Khiếu nại điểm</h1>
+        <h2>Khiếu nại điểm{classId ? ' của lớp' : ''}</h2>
         <p className="muted small">Học sinh gửi khi xem kết quả. Mọi quyết định và điểm trước/sau đều được ghi vào nhật ký.</p>
       </div>
       {data.appeals.length === 0 && <div className="card empty">Chưa có khiếu nại nào.</div>}

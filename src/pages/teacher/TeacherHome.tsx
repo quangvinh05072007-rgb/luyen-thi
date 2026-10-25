@@ -37,8 +37,8 @@ export function TeacherHome() {
       {actions.length > 0 && (
         <div className="card">
           <h2>Việc nên làm tuần này</h2>
-          {actions.map((a: any, i: number) => (
-            <a key={i} className="list-item" href={`#/lop/${a.cls.id}`} style={{ color: 'inherit' }}>
+          {actions.slice(0, 3).map((a: any, i: number) => (
+            <a key={i} className="list-item" href={`#/lop/${a.cls.id}/ket-qua?view=analysis`} style={{ color: 'inherit' }}>
               <span className="badge blue">{a.cls.name}</span>
               <div className="grow small">{a.text}</div>
             </a>
@@ -69,7 +69,7 @@ export function TeacherHome() {
           <h2>Bài đang mở</h2>
           {running.length === 0 && <p className="muted small">Không có bài nào đang mở.</p>}
           {running.map((a: any) => (
-            <a key={a.id} className="list-item" href={`#/bai-giao/${a.id}`} style={{ color: 'inherit' }}>
+            <a key={a.id} className="list-item" href={`#/lop/${a.class_id}/ket-qua/${a.id}`} style={{ color: 'inherit' }}>
               <div className="grow">
                 <div className="small strong">{a.title}</div>
                 <div className="tiny muted">
@@ -80,7 +80,7 @@ export function TeacherHome() {
           ))}
           <h3 className="mt">Đã đóng gần đây</h3>
           {recent.map((a: any) => (
-            <a key={a.id} className="list-item" href={`#/bai-giao/${a.id}`} style={{ color: 'inherit' }}>
+            <a key={a.id} className="list-item" href={`#/lop/${a.class_id}/ket-qua/${a.id}`} style={{ color: 'inherit' }}>
               <div className="grow">
                 <div className="small strong">{a.title}</div>
                 <div className="tiny muted">

@@ -12,7 +12,7 @@ function heatColor(v: number | undefined) {
   return { background: '#c9efdc', color: '#0d6e49' };
 }
 
-export function ClassView({ id }: { id: number }) {
+export function ClassView({ id, embedded = false }: { id: number; embedded?: boolean }) {
   const { meta, toast } = useApp();
   const { data, error, loading, reload } = useAsync(() => get(`/api/classes/${id}`), [id]);
   const weak = useAsync(() => get(`/api/classes/${id}/weak-groups`), [id]);
@@ -36,12 +36,12 @@ export function ClassView({ id }: { id: number }) {
   const errTotal = Object.values(data.errors as Record<string, number>).reduce((a, b) => a + b, 0);
   return (
     <div className="stack">
-      <div className="row between">
+      {!embedded && <div className="row between">
         <div><a className="small" href="#/lop-hoc">Về danh sách lớp</a><h1>Lớp {data.class.name}</h1></div>
         <a className="btn primary" href="#/ra-de">
           Ra đề cho lớp
         </a>
-      </div>
+      </div>}
       {data.actions.length > 0 && (
         <div className="card">
           <h2>Việc nên làm</h2>
@@ -261,6 +261,7 @@ export function StudentProfilePage({ id }: { id: number }) {
   return (
     <div className="stack">
       <div>
+        {data.student.class && <a className="small" href={`#/lop/${data.student.class.id}`}>Về lớp {data.student.class.name}</a>}
         <h1>{data.student.displayName}</h1>
         <div className="muted small">Lớp {data.student.class?.name}</div>
       </div>
@@ -276,10 +277,11 @@ export function TeacherAttemptView({ id }: { id: number }) {
   const { data, error, loading, reload } = useAsync(() => get(`/api/teacher/attempts/${id}`), [id]);
   if (loading) return <Loading />;
   if (error) return <ErrorBox error={error} onRetry={reload} />;
-  if (!data.result) return <div className="card stack"><h1>{data.student}</h1><p>Bài đang làm, chưa có kết quả.</p>{data.kind === 'assignment' && <AttemptActions attemptId={id} status={data.status} onDone={reload} />}</div>;
+  if (!data.result) return <div className="card stack">{data.classId&&<a className="small" href={`#/lop/${data.classId}/ket-qua${data.assignmentId?`/${data.assignmentId}`:''}`}>Về kết quả lớp</a>}<h1>{data.student}</h1><p>Bài đang làm, chưa có kết quả.</p>{data.kind === 'assignment' && <AttemptActions attemptId={id} status={data.status} onDone={reload} />}</div>;
   return (
     <div className="stack">
       <div className="card">
+        {data.classId&&<a className="small" href={`#/lop/${data.classId}/ket-qua${data.assignmentId?`/${data.assignmentId}`:''}`}>Về kết quả lớp</a>}
         <div className="small muted">{data.title}</div>
         <h1>
           {data.student}: <span style={{ color: scoreColor(data.result.score10) }}>{fmtScore(data.result.score10)}</span> điểm
