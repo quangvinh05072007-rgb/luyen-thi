@@ -111,35 +111,114 @@ export function Exams() {
         <div className="exam-widget-grid">
           {exams.map((e: any) => {
             const totalQ = (e.counts?.mcq ?? 0) + (e.counts?.tf ?? 0) + (e.counts?.short ?? 0);
+            const dept = e.dept || 'Toán';
+            const icon = dept === 'Vật lí' ? '⚡' : dept === 'Hóa học' ? '🧪' : dept === 'Sinh học' ? '🧬' : dept === 'Tiếng Anh' ? '🇬🇧' : '📐';
+            const tagBg = dept === 'Vật lí' ? '#faf5ff' : dept === 'Hóa học' ? '#f0fdfa' : dept === 'Sinh học' ? '#f0fdf4' : dept === 'Tiếng Anh' ? '#fdf2f8' : '#eff6ff';
+            const tagColor = dept === 'Vật lí' ? '#7e22ce' : dept === 'Hóa học' ? '#0f766e' : dept === 'Sinh học' ? '#15803d' : dept === 'Tiếng Anh' ? '#be185d' : '#1d4ed8';
+
             return (
-              <div key={e.id} className="exam-widget-card">
+              <div
+                key={e.id}
+                className="exam-widget-card"
+                style={{
+                  borderRadius: 16,
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: 16,
+                }}
+              >
                 <div className="row between" style={{ alignItems: 'flex-start', gap: 8 }}>
-                  <h3 className="exam-widget-title">{e.title}</h3>
+                  <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                    <span
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: tagBg,
+                        color: tagColor,
+                        display: 'grid',
+                        placeItems: 'center',
+                        fontSize: 16,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {icon}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: tagColor,
+                        background: tagBg,
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                      }}
+                    >
+                      {dept}
+                    </span>
+                  </div>
+
                   <div className="row" style={{ gap: 4, flexShrink: 0 }}>
-                    {e.visibility === 'school' ? (
-                      <span className="badge blue">Dùng chung</span>
-                    ) : (
-                      <span className="badge">Riêng tư</span>
+                    {e.mine && (
+                      <span className="badge green" style={{ fontSize: 10, padding: '2px 6px', fontWeight: 700 }}>
+                        Của bạn
+                      </span>
                     )}
-                    {e.mine && <span className="badge green">Của bạn</span>}
+                    {e.visibility === 'school' ? (
+                      <span className="badge blue" style={{ fontSize: 10, padding: '2px 6px' }}>
+                        Dùng chung
+                      </span>
+                    ) : (
+                      <span className="badge" style={{ fontSize: 10, padding: '2px 6px' }}>
+                        Riêng tư
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="exam-widget-meta">
+
+                <h3
+                  style={{
+                    margin: '10px 0 6px',
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: '#0f172a',
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {e.title}
+                </h3>
+
+                <div className="exam-widget-meta" style={{ marginTop: 'auto', paddingTop: 8 }}>
                   <span className="exam-widget-chip">⏱️ {e.durationMin} phút</span>
                   <span className="exam-widget-chip">📝 {totalQ} câu</span>
                   <span className="exam-widget-chip">👤 {e.author}</span>
-                  {e.ratingAvg ? (
-                    <span className="exam-widget-chip" style={{ color: '#fa8c16' }}>
-                      ⭐ {e.ratingAvg}/5
-                    </span>
-                  ) : null}
-                  {e.uses ? (
-                    <span className="exam-widget-chip">🔄 {e.uses} lượt</span>
-                  ) : null}
+                  {e.uses ? <span className="exam-widget-chip">🔄 {e.uses} lượt</span> : null}
                 </div>
-                <div className="exam-widget-actions">
-                  <a className="btn primary sm grow" href={`#/de-thi/${e.id}${suffix}`}>
-                    Giao đề / Chi tiết →
+
+                <div
+                  className="row"
+                  style={{
+                    gap: 8,
+                    marginTop: 12,
+                    paddingTop: 10,
+                    borderTop: '1px solid #f1f5f9',
+                  }}
+                >
+                  <a
+                    className="btn primary sm grow"
+                    href={`#/de-thi/${e.id}${suffix}`}
+                    style={{ fontWeight: 700, textAlign: 'center' }}
+                  >
+                    ⚡ Giao đề ngay
+                  </a>
+                  <a
+                    className="btn sm ghost"
+                    href={`#/de-thi/${e.id}${suffix}`}
+                    style={{ fontSize: 12 }}
+                  >
+                    Chi tiết →
                   </a>
                 </div>
               </div>

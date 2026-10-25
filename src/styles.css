@@ -124,7 +124,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .brand-name { font-weight: 800; font-size: 18px; letter-spacing: -0.03em; color: #111827; }
 .brand-tag { font-size: 11px; font-weight: 600; color: var(--primary); text-transform: uppercase; letter-spacing: 0.05em; }
 
-.sample-banner { background: #fffbe6; color: #d46b08; border: 1px solid #ffe58f; border-radius: var(--radius-sm); padding: 9px 14px; font-size: 13px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.sample-banner { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; border-radius: 12px; padding: 8px 16px; font-size: 13px; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+.sample-banner b { color: #166534; }
 .tabbar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--line); display: flex; justify-content: space-around; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); z-index: 30; box-shadow: 0 -2px 10px rgba(0,0,0,0.03); }
 .tabbar a, .tabbar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; color: var(--ink-3); padding: 6px 8px; border-radius: 8px; min-width: 56px; border: none; background: none; cursor: pointer; text-decoration: none; }
 .tabbar a.active, .tabbar button.active { color: var(--primary); font-weight: 700; background: var(--primary-soft); }
@@ -174,24 +175,23 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .widget-title svg { width: 18px; height: 18px; color: var(--primary); }
 
 /* Thẻ thống kê số liệu (Stat Widgets) */
-.stat-widget-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-@media (max-width: 900px) { .stat-widget-grid { grid-template-columns: repeat(2, 1fr); } }
+.stat-widget-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
 @media (max-width: 480px) { .stat-widget-grid { grid-template-columns: 1fr; } }
 
-.stat-widget { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: flex; align-items: center; gap: 14px; box-shadow: var(--shadow); transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1); text-decoration: none; color: inherit; position: relative; overflow: hidden; }
-.stat-widget:hover { transform: translateY(-4px) scale(1.015); border-color: #91caff; box-shadow: var(--shadow-hover); text-decoration: none; }
+.stat-widget { background: #ffffff; border: 1px solid rgba(226, 232, 240, 0.9); border-radius: 16px; padding: 18px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03), 0 4px 12px -2px rgba(15, 23, 42, 0.04); transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1); text-decoration: none; color: inherit; position: relative; overflow: hidden; }
+.stat-widget:hover { transform: translateY(-3px); border-color: #93c5fd; box-shadow: 0 10px 24px -4px rgba(37, 99, 235, 0.12); text-decoration: none; }
 .stat-widget:active { transform: translateY(-1px) scale(0.98); }
-.stat-widget-icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0; transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.stat-widget:hover .stat-widget-icon { transform: scale(1.1) rotate(4deg); }
-.stat-widget-icon svg { width: 22px; height: 22px; }
+.stat-widget-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; flex-shrink: 0; transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.stat-widget:hover .stat-widget-icon { transform: scale(1.08) rotate(3deg); }
+.stat-widget-icon svg { width: 24px; height: 24px; }
 .stat-widget-icon.blue { background: #e6f4ff; color: #1677ff; }
 .stat-widget-icon.orange { background: #fff7e6; color: #fa8c16; }
 .stat-widget-icon.green { background: #f6ffed; color: #52c41a; }
 .stat-widget-icon.purple { background: #f9f0ff; color: #722ed1; }
 
 .stat-widget-info { display: flex; flex-direction: column; min-width: 0; }
-.stat-widget-num { font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.stat-widget-label { font-size: 13px; color: var(--ink-3); font-weight: 500; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-widget-num { font-size: 28px; font-weight: 800; color: #0f172a; line-height: 1.1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.stat-widget-label { font-size: 13px; color: #64748b; font-weight: 500; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Thẻ thao tác nhanh kiểu Azota (App Launchers) */
 .launcher-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px; }
@@ -463,11 +463,11 @@ table.t tr.click:hover td { background: #f0f7ff; }
 .role-secondary { justify-content: center; gap: 24px; font-size: 14px; }
 .demo-accounts button { text-align: left; }
 
-/* ---------- TABS & NAVIGATION ---------- */
-.section-tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
-.section-tabs > a, .section-tabs > button { background: transparent; border: 0; color: var(--ink-2); border-radius: 8px; padding: 9px 14px; min-height: 40px; display: inline-flex; align-items: center; font-weight: 600; cursor: pointer; font-size: 14px; text-decoration: none; transition: all 0.15s ease; }
-.section-tabs > .active { color: var(--primary); background: var(--primary-soft); font-weight: 700; }
-.section-tabs > a:hover, .section-tabs > button:hover { text-decoration: none; background: var(--surface-2); color: var(--primary); }
+/* ---------- TABS & NAVIGATION (MODERN SEGMENTED TABS) ---------- */
+.section-tabs { display: inline-flex; align-items: center; gap: 4px; background: #f1f5f9; padding: 4px; border-radius: 12px; border: 1px solid #e2e8f0; width: fit-content; max-width: 100%; overflow-x: auto; margin-bottom: 16px; }
+.section-tabs > a, .section-tabs > button { background: transparent; border: 0; color: #64748b; border-radius: 8px; padding: 8px 16px; min-height: 36px; display: inline-flex; align-items: center; font-weight: 600; cursor: pointer; font-size: 13.5px; text-decoration: none; transition: all 0.18s ease; white-space: nowrap; gap: 6px; }
+.section-tabs > .active { color: #0f172a; background: #ffffff; font-weight: 700; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+.section-tabs > a:hover:not(.active), .section-tabs > button:hover:not(.active) { text-decoration: none; background: rgba(255, 255, 255, 0.6); color: #0f172a; }
 
 .student-avatar { width: 38px; height: 38px; flex-shrink: 0; border-radius: 50%; background: linear-gradient(135deg, #e6f4ff 0%, #bae0ff 100%); color: #1677ff; display: grid; place-items: center; font-weight: 700; }
 .class-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin: 0; }

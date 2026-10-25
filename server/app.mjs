@@ -1058,8 +1058,11 @@ export function createApp(config = {}) {
     return `${prefix}-${Date.now().toString(36).slice(-4).toUpperCase()}`;
   }
 
-  route('GET', '/api/classes', STAFF, ({ user }) => {
-    const ids = teacherClassIds(user);
+  route('GET', '/api/classes', STAFF, ({ user, query }) => {
+    const isAll = user.role === 'admin' || query.scope === 'all';
+    const ids = isAll
+      ? db.all('SELECT id FROM classes WHERE school_id = ?', user.school_id).map((c) => c.id)
+      : teacherClassIds(user);
     if (!ids.length) return { classes: [] };
     const t = now();
     const rows = db.all(
@@ -1072,7 +1075,8 @@ export function createApp(config = {}) {
       t,
       ...ids,
     );
-    return { classes: rows };
+    const myIds = new Set(teacherClassIds(user));
+    return { classes: rows.map((r) => ({ ...r, mine: myIds.has(r.id) })) };
   });
 
   route('POST', '/api/classes', STAFF, ({ user, body, ip }) => {

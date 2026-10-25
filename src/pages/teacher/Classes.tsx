@@ -11,11 +11,16 @@ type ClassRow = {
   code?: string;
   active_assignments?: number;
   total_assignments?: number;
+  mine?: boolean;
 };
 
 export function Classes() {
   const { user, toast } = useApp();
-  const { data, error, loading, reload } = useAsync(() => get<{ classes: ClassRow[] }>('/api/classes'), []);
+  const [scope, setScope] = useState<'mine' | 'all'>('mine');
+  const { data, error, loading, reload } = useAsync(
+    () => get<{ classes: ClassRow[] }>(`/api/classes${scope === 'all' ? '?scope=all' : ''}`),
+    [scope]
+  );
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -79,7 +84,37 @@ export function Classes() {
             Tổ chức lớp theo khối, cấp mã tham gia cho học sinh và theo dõi bài thi.
           </p>
         </div>
+
         <div className="row" style={{ gap: 10 }}>
+          {/* Scope Selector: Lớp của tôi / Toàn trường */}
+          <div
+            className="row"
+            style={{
+              background: '#f1f5f9',
+              padding: 3,
+              borderRadius: 10,
+              gap: 2,
+              border: '1px solid #e2e8f0',
+            }}
+          >
+            <button
+              type="button"
+              className={`btn sm ${scope === 'mine' ? 'primary' : 'ghost'}`}
+              style={{ padding: '6px 14px', height: 34, fontSize: 13, borderRadius: 8, fontWeight: 600 }}
+              onClick={() => setScope('mine')}
+            >
+              👤 Lớp của tôi
+            </button>
+            <button
+              type="button"
+              className={`btn sm ${scope === 'all' ? 'primary' : 'ghost'}`}
+              style={{ padding: '6px 14px', height: 34, fontSize: 13, borderRadius: 8, fontWeight: 600 }}
+              onClick={() => setScope('all')}
+            >
+              🏫 Toàn trường
+            </button>
+          </div>
+
           <button type="button" className="btn primary" onClick={() => setShowCreate(true)}>
             <Icon name="plus" /> Tạo lớp mới
           </button>
@@ -146,7 +181,9 @@ export function Classes() {
               </div>
               <div className="stat-widget-info">
                 <span className="stat-widget-num">{classes.length}</span>
-                <span className="stat-widget-label">Tổng số lớp</span>
+                <span className="stat-widget-label">
+                  {scope === 'mine' ? 'Lớp bạn phụ trách' : 'Tổng số lớp trường'}
+                </span>
               </div>
             </div>
             <div className="stat-widget">
@@ -172,7 +209,7 @@ export function Classes() {
           {/* Grade Tabs & Search/View Controls */}
           <div
             className="card flat row between wrap"
-            style={{ padding: '12px 16px', gap: 12, alignItems: 'center' }}
+            style={{ padding: '12px 18px', gap: 12, alignItems: 'center' }}
           >
             {/* Grade Tabs */}
             <div className="filter-pills" style={{ flexWrap: 'wrap', gap: 6 }}>
@@ -214,7 +251,7 @@ export function Classes() {
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="🔍 Tìm tên lớp, mã lớp, GV…"
+                  placeholder="🔍 Tìm tên lớp, mã, GV…"
                   style={{ height: 38, borderRadius: 20, padding: '6px 14px' }}
                 />
               </div>
@@ -264,23 +301,27 @@ export function Classes() {
           </div>
 
           {/* Classes Display */}
-          {classes.length === 0 ? (
-            <div className="card empty" style={{ padding: '48px 24px', textAlign: 'center' }}>
-              <span style={{ fontSize: 40, display: 'block', marginBottom: 10 }}>🏫</span>
-              <h2 style={{ margin: 0, fontSize: 18 }}>Chưa có lớp học nào</h2>
-              <p className="tiny muted" style={{ margin: '6px 0 16px' }}>
-                Bấm vào nút "Tạo lớp mới" ở trên để tạo lớp và nhận mã tham gia cho học sinh.
-              </p>
-              <button type="button" className="btn primary" onClick={() => setShowCreate(true)}>
-                + Tạo lớp đầu tiên
-              </button>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="card empty" style={{ padding: '36px 20px', textAlign: 'center' }}>
-              <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>🔍</span>
-              <div style={{ fontWeight: 600, color: '#374151' }}>Không tìm thấy lớp học phù hợp</div>
+          {filtered.length === 0 ? (
+            <div className="card empty" style={{ padding: '40px 20px', textAlign: 'center' }}>
+              <span style={{ fontSize: 36, display: 'block', marginBottom: 8 }}>🔍</span>
+              <div style={{ fontWeight: 600, color: '#374151', fontSize: 16 }}>Không tìm thấy lớp học phù hợp</div>
               <p className="tiny muted" style={{ marginTop: 4 }}>
-                Thử chọn khối khác hoặc xóa từ khóa tìm kiếm.
+                {scope === 'mine' ? (
+                  <span>
+                    Bạn đang lọc theo <strong>Lớp của tôi</strong>. Bấm nút{' '}
+                    <button
+                      type="button"
+                      className="btn sm"
+                      style={{ padding: '2px 8px', fontSize: 12 }}
+                      onClick={() => setScope('all')}
+                    >
+                      🏫 Toàn trường
+                    </button>{' '}
+                    để xem tất cả lớp học trong trường.
+                  </span>
+                ) : (
+                  'Thử chọn khối khác hoặc xóa từ khóa tìm kiếm.'
+                )}
               </p>
             </div>
           ) : viewMode === 'grid' ? (
@@ -298,25 +339,29 @@ export function Classes() {
                   <div key={c.id} className="class-modern-card">
                     {/* Header Banner with Grade Theme */}
                     <div className={gradeClass}>
-                      <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-                        <span style={{ fontSize: 20 }}>
-                          {c.grade === 12 ? '🎓' : c.grade === 11 ? '📘' : '📗'}
-                        </span>
-                        <div>
-                          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#ffffff' }}>
+                      <div>
+                        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                          <span style={{ fontSize: 20 }}>
+                            {c.grade === 12 ? '🎓' : c.grade === 11 ? '📘' : '📗'}
+                          </span>
+                          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
                             Lớp {c.name}
                           </h2>
-                          <div style={{ fontSize: 11, opacity: 0.9, marginTop: 1 }}>Khối {c.grade}</div>
+                        </div>
+                        <div style={{ fontSize: 12, opacity: 0.9, marginTop: 4, color: '#ffffff' }}>
+                          Khối {c.grade} · Niên khóa 2025–2026
                         </div>
                       </div>
+
                       <span
                         style={{
-                          background: 'rgba(255, 255, 255, 0.2)',
+                          background: 'rgba(255, 255, 255, 0.22)',
                           padding: '4px 10px',
                           borderRadius: 20,
                           fontSize: 12,
                           fontWeight: 700,
-                          backdropFilter: 'blur(4px)',
+                          backdropFilter: 'blur(6px)',
+                          border: '1px solid rgba(255, 255, 255, 0.3)',
                         }}
                       >
                         👥 {c.students} hs
@@ -327,8 +372,25 @@ export function Classes() {
                     <div className="class-modern-body">
                       {/* Teacher Row */}
                       <div className="row between" style={{ fontSize: 13, alignItems: 'center' }}>
-                        <span className="tiny muted">Giáo viên phụ trách:</span>
-                        <strong style={{ color: '#334155' }}>{c.teacher ?? 'Chưa gán GV'}</strong>
+                        <span className="tiny muted">Phụ trách:</span>
+                        <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                          <strong style={{ color: '#1e293b' }}>{c.teacher ?? 'Chưa gán GV'}</strong>
+                          {c.mine && (
+                            <span
+                              style={{
+                                background: '#f0fdf4',
+                                color: '#166534',
+                                border: '1px solid #bbf7d0',
+                                padding: '1px 6px',
+                                borderRadius: 4,
+                                fontSize: 10,
+                                fontWeight: 700,
+                              }}
+                            >
+                              Lớp của bạn
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Join Code Chip */}
@@ -339,7 +401,7 @@ export function Classes() {
                             background: '#f8fafc',
                             border: '1px dashed #cbd5e1',
                             borderRadius: 8,
-                            padding: '6px 12px',
+                            padding: '7px 12px',
                             alignItems: 'center',
                           }}
                         >
@@ -353,7 +415,7 @@ export function Classes() {
                             style={{ padding: '2px 8px', height: 'auto', fontSize: 11 }}
                             onClick={() => {
                               navigator.clipboard?.writeText(c.code!);
-                              toast(`Đã chép mã lớp ${c.code}`);
+                              toast(`Đã sao chép mã lớp ${c.code}`);
                             }}
                           >
                             Sao chép
@@ -362,7 +424,7 @@ export function Classes() {
                       )}
 
                       {/* Status / Active Exam indicator */}
-                      <div style={{ marginTop: 'auto' }}>
+                      <div style={{ marginTop: 'auto', paddingTop: 4 }}>
                         {c.active_assignments && c.active_assignments > 0 ? (
                           <div
                             className="row"
@@ -371,8 +433,8 @@ export function Classes() {
                               alignItems: 'center',
                               background: '#fff7e6',
                               border: '1px solid #ffd591',
-                              padding: '5px 10px',
-                              borderRadius: 6,
+                              padding: '6px 10px',
+                              borderRadius: 8,
                               fontSize: 12,
                               color: '#d46b08',
                               fontWeight: 600,
@@ -412,6 +474,33 @@ export function Classes() {
                   </div>
                 );
               })}
+
+              {/* Add Class Placeholder Card (Keeps grid balanced) */}
+              <div
+                className="class-add-placeholder"
+                onClick={() => setShowCreate(true)}
+                title="Bấm để tạo thêm lớp mới"
+              >
+                <div
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: '50%',
+                    background: '#e0f2fe',
+                    color: '#0284c7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 22,
+                  }}
+                >
+                  ➕
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>Tạo lớp học mới</div>
+                <div className="tiny muted" style={{ maxWidth: 200 }}>
+                  Thêm lớp mới, cấp mã tham gia và ra đề kiểm tra cho học sinh
+                </div>
+              </div>
             </div>
           ) : (
             /* Modern Table View for bulk management */
@@ -423,7 +512,7 @@ export function Classes() {
                     <th>Khối</th>
                     <th>Mã tham gia</th>
                     <th>Sĩ số</th>
-                    <th>Giáo viên</th>
+                    <th>Giáo viên phụ trách</th>
                     <th>Bài thi</th>
                     <th style={{ textAlign: 'right' }}>Thao tác</th>
                   </tr>
@@ -432,7 +521,23 @@ export function Classes() {
                   {filtered.map((c) => (
                     <tr key={c.id}>
                       <td>
-                        <strong style={{ fontSize: 14, color: '#0f172a' }}>Lớp {c.name}</strong>
+                        <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                          <strong style={{ fontSize: 14, color: '#0f172a' }}>Lớp {c.name}</strong>
+                          {c.mine && (
+                            <span
+                              style={{
+                                background: '#f0fdf4',
+                                color: '#166534',
+                                padding: '1px 5px',
+                                borderRadius: 4,
+                                fontSize: 10,
+                                fontWeight: 700,
+                              }}
+                            >
+                              Của bạn
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <span
