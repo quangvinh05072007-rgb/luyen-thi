@@ -44,7 +44,9 @@ export function StudentHome() {
         <div className="row" style={{ gap: 14 }}>
           <Mascot size={52} mood={goalPct >= 1 ? 'cheer' : 'happy'} />
           <div>
-            <h1 style={{ margin: 0, fontSize: 22 }}>Chào {user.displayName.split(' ').slice(-1)[0]}!</h1>
+            <h1 style={{ margin: 0, fontSize: 22 }}>
+              Chào <span className="gradient-text">{user.displayName.split(' ').slice(-1)[0]}</span>!
+            </h1>
             <div className="row tiny muted" style={{ marginTop: 2, gap: 8 }}>
               <span>Lớp {user.class?.name ?? 'học sinh'}</span>
               <span>·</span>
@@ -54,7 +56,20 @@ export function StudentHome() {
         </div>
         <div className="row" style={{ gap: 12 }}>
           <span className="streak">🔥 {data.streak} ngày</span>
-          <span className="badge blue" style={{ fontSize: 13, padding: '4px 10px' }}>⚡ {data.xp} XP</span>
+          <span
+            className="badge"
+            style={{
+              fontSize: 13,
+              padding: '4px 12px',
+              background: 'linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%)',
+              borderColor: '#d3adf7',
+              color: '#531dab',
+              fontWeight: 800,
+              boxShadow: '0 2px 8px rgba(114, 46, 209, 0.15)',
+            }}
+          >
+            ⚡ {data.xp} XP
+          </span>
           <div style={{ minWidth: 120 }}>
             <div className="row between tiny muted mb" style={{ marginBottom: 3 }}>
               <span>Mục tiêu ngày</span>
@@ -72,6 +87,7 @@ export function StudentHome() {
         <div className="student-mission-widget">
           <div>
             <div className="student-mission-badge">
+              <span className="live-dot" style={{ marginRight: 2 }} />
               <Icon name="clock" /> {next.mode === 'exam' ? 'Bài kiểm tra tính giờ' : 'Bài tập về nhà'}
             </div>
             <div className="student-mission-title">{next.title}</div>

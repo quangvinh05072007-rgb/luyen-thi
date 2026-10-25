@@ -188,7 +188,7 @@ export function scoreColor(s: number | null | undefined) {
 // ---------- mascot gốc: "Cú Pi" — chú cú tròn, bụng có chữ π ----------
 export function Mascot({ size = 72, mood = 'happy' }: { size?: number; mood?: 'happy' | 'think' | 'cheer' }) {
   return (
-    <svg className="mascot" width={size} height={size} viewBox="0 0 120 120" aria-label="Cú Pi">
+    <svg className="mascot mascot-float" width={size} height={size} viewBox="0 0 120 120" aria-label="Cú Pi">
       <ellipse cx="60" cy="112" rx="30" ry="5" fill="#000" opacity="0.08" />
       <path d="M28 46 L22 22 L44 36 Z" fill="#2238b8" />
       <path d="M92 46 L98 22 L76 36 Z" fill="#2238b8" />

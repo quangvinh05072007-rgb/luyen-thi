@@ -26,7 +26,9 @@ export function TeacherHome() {
       {/* Top Header Widget */}
       <div className="row between mb" style={{ alignItems: 'center' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 24 }}>Bảng điều khiển</h1>
+          <h1 style={{ margin: 0, fontSize: 24 }}>
+            <span className="gradient-text">Bảng điều khiển</span>
+          </h1>
           <p className="tiny muted" style={{ margin: '2px 0 0' }}>Giáo viên: <b>{user.displayName}</b> · {user.school.name}</p>
         </div>
         <div className="row">
@@ -108,7 +110,13 @@ export function TeacherHome() {
           <div className="widget-card">
             <div className="widget-head">
               <h2 className="widget-title"><Icon name="exam" /> Bài thi đang diễn ra</h2>
-              <span className="badge green">{running.length} đang mở</span>
+              {running.length > 0 ? (
+                <span className="live-indicator">
+                  <span className="live-dot" /> {running.length} đang mở
+                </span>
+              ) : (
+                <span className="badge">{running.length} đang mở</span>
+              )}
             </div>
             {running.length === 0 ? (
               <p className="tiny muted center" style={{ padding: '16px 0' }}>Không có bài thi nào đang mở.</p>
