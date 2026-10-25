@@ -126,6 +126,15 @@ export function createApp(config = {}) {
     );
   }
 
+  const reviewPolicy = (schoolId) => db.get('SELECT review_policy p FROM schools WHERE id = ?', schoolId)?.p ?? 'single';
+  /** Đề xem được: đề dùng chung của trường, đề của chính mình; quản lý xem hết trong trường. */
+  function visibleExam(user, id) {
+    const e = db.get('SELECT * FROM exams WHERE id = ?', id);
+    if (!e || e.school_id !== user.school_id) fail(404, 'Không tìm thấy đề.');
+    if (e.visibility !== 'school' && e.created_by !== user.id && user.role !== 'admin') fail(404, 'Không tìm thấy đề.');
+    return e;
+  }
+
   function questionUsed(schoolId, qid) {
     if (db.get('SELECT 1 x FROM evidence WHERE school_id = ? AND qid = ? LIMIT 1', schoolId, qid)) return true;
     return db.all('SELECT items_json FROM exams WHERE school_id = ?', schoolId).some((e) => e.items.some((x) => x.qid === qid));
@@ -478,7 +487,7 @@ export function createApp(config = {}) {
     if (query.source) (where.push('source = ?'), p.push(query.source));
     if (query.level) (where.push('level = ?'), p.push(Number(query.level)));
     if (query.q) (where.push('stem LIKE ?'), p.push(`%${query.q}%`));
-    const rows = db.all(`SELECT * FROM questions WHERE ${where.join(' AND ')} ORDER BY status = 'draft' DESC, updated_at DESC LIMIT 500`, ...p).map((r) => ({ ...toQuestion(r), explanationDraft: r.explanation_draft ?? null, draftCheck: r.draft_check ?? null }));
+    const rows = db.all(`SELECT * FROM questions WHERE ${where.join(' AND ')} ORDER BY status = 'draft' DESC, updated_at DESC LIMIT 500`, ...p).map((r) => ({ ...toQuestion(r), explanationDraft: r.explanation_draft ?? null, draftCheck: r.draft_check ?? null, approvals: r.approvals ?? [] }));
     const usage = db.all('SELECT qid, COUNT(*) n, AVG(score) p FROM evidence WHERE school_id = ? GROUP BY qid', user.school_id);
     const um = Object.fromEntries(usage.map((u) => [u.qid, u]));
     const counts = db.all("SELECT status, COUNT(*) n FROM questions WHERE school_id = ? AND status != 'archived' GROUP BY status", user.school_id);
@@ -537,6 +546,7 @@ export function createApp(config = {}) {
       const errs = validateQuestion(merged);
       if (errs.length) fail(400, `Câu đã duyệt phải hợp lệ: ${errs.join(' ')}`);
     }
+    const contentChanged = ['type', 'stem'].some((k) => merged[k] !== q[k]) || JSON.stringify(merged.options ?? []) !== JSON.stringify(q.options ?? []) || answerChanged;
     recordVersion(q, user, reason ?? body.versionNote ?? 'Sửa câu hỏi');
     db.run(
       'UPDATE questions SET type = ?, stem = ?, options_json = ?, answer_json = ?, explanation = ?, topic = ?, level = ?, distractors_json = ?, group_id = ?, tag_confidence = 1, updated_at = ? WHERE id = ?',
@@ -552,28 +562,59 @@ export function createApp(config = {}) {
       now(),
       q.id,
     );
+    if (contentChanged) {
+      if (reviewPolicy(user.school_id) === 'double' && q.status === 'approved') db.run("UPDATE questions SET status = 'draft', approvals_json = NULL, approved_by = NULL WHERE id = ?", q.id);
+      else db.run('UPDATE questions SET approvals_json = NULL WHERE id = ?', q.id);
+    }
     if (sensitive) audit(user, 'question_answer_change', `#${q.id}`, ip, { target: `question:${q.id}`, old: { answer: toQuestion(q).answer }, new: { answer: merged.answer }, reason });
     else audit(user, 'question_edit', `#${q.id}`, ip, { target: `question:${q.id}` });
     return { question: toQuestion(db.get('SELECT * FROM questions WHERE id = ?', q.id)) };
   });
+  // Chính sách duyệt: 'single' (một người duyệt là xong) hoặc 'double' (cần hai người khác nhau, trong đó có người không phải tác giả).
   route('POST', '/api/questions/approve', STAFF, ({ user, body, ip }) => {
     const ids = (Array.isArray(body.ids) ? body.ids : []).map(Number);
+    const double = reviewPolicy(user.school_id) === 'double';
     const approved = [];
+    const pending = [];
     const rejected = [];
     db.tx(() => {
       for (const id of ids) {
         const q = db.get('SELECT * FROM questions WHERE id = ? AND school_id = ?', id, user.school_id);
         if (!q) continue;
         const errs = validateQuestion(toQuestion(q));
-        if (errs.length) rejected.push({ id, errors: errs });
-        else {
+        if (errs.length) {
+          rejected.push({ id, errors: errs });
+          continue;
+        }
+        if (!double) {
           db.run("UPDATE questions SET status = 'approved', approved_by = ?, updated_at = ? WHERE id = ?", user.id, now(), id);
           approved.push(id);
+          continue;
+        }
+        if (q.status === 'approved') continue;
+        const who = [...new Set([...(q.approvals ?? []), user.id])];
+        const enough = who.length >= 2 && who.some((u) => u !== q.created_by);
+        if (enough) {
+          db.run("UPDATE questions SET status = 'approved', approved_by = ?, approvals_json = ?, updated_at = ? WHERE id = ?", user.id, JSON.stringify(who), now(), id);
+          approved.push(id);
+        } else {
+          db.run('UPDATE questions SET approvals_json = ? WHERE id = ?', JSON.stringify(who), id);
+          pending.push({ id, message: who.length < 2 ? 'Cần một giáo viên khác duyệt thêm.' : 'Cần một người không phải tác giả câu duyệt.' });
         }
       }
     });
     if (approved.length) audit(user, 'question_approve', approved.map((x) => `#${x}`).join(' '), ip);
-    return { approved, rejected };
+    if (pending.length) audit(user, 'question_approve_first', pending.map((x) => `#${x.id}`).join(' '), ip);
+    return { approved, rejected, pending };
+  });
+  route('GET', '/api/admin/settings', ['admin'], ({ user }) => ({ reviewPolicy: reviewPolicy(user.school_id) }));
+  route('PUT', '/api/admin/settings', ['admin'], ({ user, body, ip }) => {
+    const old = reviewPolicy(user.school_id);
+    const next = body.reviewPolicy === 'double' ? 'double' : body.reviewPolicy === 'single' ? 'single' : null;
+    if (!next) fail(400, 'Chính sách duyệt phải là "single" hoặc "double".');
+    db.run('UPDATE schools SET review_policy = ? WHERE id = ?', next, user.school_id);
+    audit(user, 'settings_change', `chính sách duyệt câu hỏi: ${next === 'double' ? 'hai người' : 'một người'}`, ip, { target: `school:${user.school_id}`, old: { reviewPolicy: old }, new: { reviewPolicy: next } });
+    return { reviewPolicy: next };
   });
   route('POST', '/api/questions/archive', STAFF, ({ user, body, ip }) => {
     const ids = (Array.isArray(body.ids) ? body.ids : []).map(Number);
@@ -833,8 +874,7 @@ export function createApp(config = {}) {
 
   // ---- nhân bản đề ----
   route('POST', '/api/exams/:id/clone', STAFF, ({ user, params, body, ip }) => {
-    const e = db.get('SELECT * FROM exams WHERE id = ? AND school_id = ?', params.id, user.school_id);
-    if (!e) fail(404, 'Không tìm thấy đề.');
+    const e = visibleExam(user, params.id);
     // Câu còn dùng được thì lấy bản mới nhất; câu đã bị lưu trữ giữ nguyên bản đã chụp để đề không đổi.
     const fresh = questionsMap(user.school_id, e.items.map((x) => x.qid));
     const snapshot = {};
@@ -844,7 +884,7 @@ export function createApp(config = {}) {
     const title = String(body.title ?? '').trim() || `${e.title} (bản sao)`;
     const id = Number(
       db
-        .run('INSERT INTO exams (school_id, title, blueprint_json, items_json, duration_min, variants_json, snapshot_json, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)', user.school_id, title, JSON.stringify(e.blueprint ?? {}), JSON.stringify(items), e.duration_min, JSON.stringify(variants), JSON.stringify(snapshot), user.id, now())
+        .run('INSERT INTO exams (school_id, title, blueprint_json, items_json, duration_min, variants_json, snapshot_json, created_by, created_at, visibility, parent_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)', user.school_id, title, JSON.stringify(e.blueprint ?? {}), JSON.stringify(items), e.duration_min, JSON.stringify(variants), JSON.stringify(snapshot), user.id, now(), 'private', e.id)
         .lastInsertRowid,
     );
     audit(user, 'exam_clone', `#${e.id} → #${id}`, ip, { target: `exam:${id}`, old: { from: e.id } });
@@ -864,7 +904,7 @@ export function createApp(config = {}) {
     const norm = items.map((x) => ({ qid: Number(x.qid), type: qmap[x.qid].type, topic: qmap[x.qid].topic, level: qmap[x.qid].level, group: qmap[x.qid].group_id ?? null }));
     const variants = makeVariants(norm, Number(body.variants) || 4, body.seed ?? `${user.id}-${now()}`);
     const r = db.run(
-      'INSERT INTO exams (school_id, title, blueprint_json, items_json, duration_min, variants_json, snapshot_json, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO exams (school_id, title, blueprint_json, items_json, duration_min, variants_json, snapshot_json, created_by, created_at, visibility, dept) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
       user.school_id,
       String(body.title).trim(),
       JSON.stringify(body.blueprint ?? {}),
@@ -874,29 +914,104 @@ export function createApp(config = {}) {
       JSON.stringify(qmap),
       user.id,
       now(),
+      body.visibility === 'school' ? 'school' : 'private',
+      body.dept ? String(body.dept).trim().slice(0, 40) : null,
     );
     audit(user, 'exam_create', `#${r.lastInsertRowid} ${body.title}`, ip);
     return { id: Number(r.lastInsertRowid) };
   });
-  route('GET', '/api/exams', STAFF, ({ user }) => {
-    const rows = db.all('SELECT e.id, e.title, e.items_json, e.duration_min, e.created_at, u.display_name author FROM exams e JOIN users u ON u.id = e.created_by WHERE e.school_id = ? ORDER BY e.created_at DESC', user.school_id);
-    return {
-      exams: rows.map((e) => ({ id: e.id, title: e.title, durationMin: e.duration_min, createdAt: e.created_at, author: e.author, counts: { mcq: e.items.filter((x) => x.type === 'mcq').length, tf: e.items.filter((x) => x.type === 'tf').length, short: e.items.filter((x) => x.type === 'short').length } })),
-    };
+  // Đề xem được: của mình + đề dùng chung của trường. "Hot" = lượt dùng (giao bài + nhân bản) và đánh giá sao, có trọng số theo số người đánh giá.
+  route('GET', '/api/exams', STAFF, ({ user, query }) => {
+    const rows = db.all(
+      `SELECT e.id, e.title, e.items_json, e.duration_min, e.created_at, e.visibility, e.dept, e.created_by, u.display_name author,
+         (SELECT COUNT(*) FROM assignments a WHERE a.exam_id = e.id) assigned,
+         (SELECT COUNT(*) FROM exams c WHERE c.parent_id = e.id) clones,
+         (SELECT AVG(stars) FROM exam_ratings r WHERE r.exam_id = e.id) stars,
+         (SELECT COUNT(*) FROM exam_ratings r WHERE r.exam_id = e.id) rated
+       FROM exams e JOIN users u ON u.id = e.created_by
+       WHERE e.school_id = ? AND (e.visibility = 'school' OR e.created_by = ? OR ? = 'admin') ORDER BY e.created_at DESC`,
+      user.school_id,
+      user.id,
+      user.role,
+    );
+    let list = rows.map((e) => ({
+      id: e.id,
+      title: e.title,
+      durationMin: e.duration_min,
+      createdAt: e.created_at,
+      author: e.author,
+      mine: e.created_by === user.id,
+      visibility: e.visibility,
+      dept: e.dept,
+      uses: e.assigned + e.clones,
+      ratingAvg: e.stars === null ? null : Math.round(e.stars * 10) / 10,
+      ratingCount: e.rated,
+      hot: e.assigned + e.clones + (e.stars === null ? 0 : e.stars * Math.sqrt(e.rated)),
+      counts: { mcq: e.items.filter((x) => x.type === 'mcq').length, tf: e.items.filter((x) => x.type === 'tf').length, short: e.items.filter((x) => x.type === 'short').length },
+    }));
+    if (query.scope === 'mine') list = list.filter((e) => e.mine);
+    else if (query.scope === 'shared' || query.scope === 'hot') list = list.filter((e) => e.visibility === 'school');
+    if (query.dept) list = list.filter((e) => e.dept === query.dept);
+    if (query.scope === 'hot') list = list.sort((x, y) => y.hot - x.hot || y.createdAt - x.createdAt).slice(0, 20);
+    return { exams: list };
   });
-  route('GET', '/api/exams/:id', STAFF, ({ user, params }) => {
-    const e = db.get('SELECT * FROM exams WHERE id = ? AND school_id = ?', params.id, user.school_id);
+  route('POST', '/api/exams/:id/share', STAFF, ({ user, params, body, ip }) => {
+    const e = db.get('SELECT * FROM exams WHERE id = ?', params.id);
     if (!e) fail(404, 'Không tìm thấy đề.');
+    const target = `exam:${e.id}`;
+    if (e.school_id !== user.school_id) deny(user, 'exam_share', target, 'Đề không thuộc trường của bạn.', ip);
+    if (e.created_by !== user.id && user.role !== 'admin') deny(user, 'exam_share', target, 'Chỉ người ra đề hoặc quản lý mới đổi phạm vi chia sẻ.', ip);
+    const visibility = body.visibility === 'school' ? 'school' : 'private';
+    const dept = body.dept ? String(body.dept).trim().slice(0, 40) : null;
+    db.run('UPDATE exams SET visibility = ?, dept = ? WHERE id = ?', visibility, dept, e.id);
+    audit(user, 'exam_share', `#${e.id} → ${visibility === 'school' ? 'dùng chung trong trường' : 'riêng tư'}`, ip, { target, old: { visibility: e.visibility, dept: e.dept }, new: { visibility, dept } });
+    return { ok: true, visibility, dept };
+  });
+  route('POST', '/api/exams/:id/rate', STAFF, ({ user, params, body }) => {
+    const e = visibleExam(user, params.id);
+    if (e.visibility !== 'school') fail(400, 'Chỉ đánh giá được đề đang dùng chung.');
+    if (e.created_by === user.id) fail(400, 'Không tự đánh giá đề của mình.');
+    const stars = Math.floor(Number(body.stars));
+    if (!(stars >= 1 && stars <= 5)) fail(400, 'Chấm từ 1 đến 5 sao.');
+    db.run('INSERT INTO exam_ratings (exam_id, user_id, stars, comment, at) VALUES (?,?,?,?,?) ON CONFLICT(exam_id, user_id) DO UPDATE SET stars = excluded.stars, comment = excluded.comment, at = excluded.at', e.id, user.id, stars, body.comment ? String(body.comment).slice(0, 500) : null, now());
+    const agg = db.get('SELECT AVG(stars) avg, COUNT(*) n FROM exam_ratings WHERE exam_id = ?', e.id);
+    return { ratingAvg: Math.round(agg.avg * 10) / 10, ratingCount: agg.n };
+  });
+
+  // ---- bình luận trên câu hỏi / đề (chỉ thêm) ----
+  function commentRoutes(kind, table) {
+    const find = (user, id) => {
+      if (kind === 'exam') return visibleExam(user, id);
+      const q = db.get(`SELECT id, school_id FROM ${table} WHERE id = ?`, id);
+      if (!q || q.school_id !== user.school_id) fail(404, 'Không tìm thấy câu hỏi.');
+      return q;
+    };
+    route('GET', `/api/${kind}s/:id/comments`, STAFF, ({ user, params }) => {
+      const t = find(user, params.id);
+      return { comments: db.all('SELECT c.id, c.body, c.at, c.user_id, u.display_name author FROM comments c JOIN users u ON u.id = c.user_id WHERE c.target_type = ? AND c.target_id = ? ORDER BY c.id', kind, t.id).map((c) => ({ id: c.id, body: c.body, at: c.at, author: c.author, mine: c.user_id === user.id })) };
+    });
+    route('POST', `/api/${kind}s/:id/comments`, STAFF, ({ user, params, body, ip }) => {
+      const t = find(user, params.id);
+      const text = String(body.body ?? '').trim();
+      if (!text) fail(400, 'Nhập nội dung bình luận.');
+      const id = Number(db.run('INSERT INTO comments (school_id, target_type, target_id, user_id, body, at) VALUES (?,?,?,?,?,?)', user.school_id, kind, t.id, user.id, text.slice(0, 1000), now()).lastInsertRowid);
+      audit(user, 'comment_add', `${kind} #${t.id}`, ip, { target: `${kind}:${t.id}` });
+      return { id };
+    });
+  }
+  commentRoutes('question', 'questions');
+  commentRoutes('exam', 'exams');
+
+  route('GET', '/api/exams/:id', STAFF, ({ user, params }) => {
+    const e = visibleExam(user, params.id);
     return { exam: { id: e.id, title: e.title, durationMin: e.duration_min, items: e.items, variants: e.variants.map((v) => v.code), blueprint: e.blueprint }, questions: e.snapshot };
   });
   route('GET', '/api/exams/:id/answer-key', STAFF, ({ user, params }) => {
-    const e = db.get('SELECT * FROM exams WHERE id = ? AND school_id = ?', params.id, user.school_id);
-    if (!e) fail(404, 'Không tìm thấy đề.');
+    const e = visibleExam(user, params.id);
     return crossAnswerKey(e.items, e.variants.map((v) => ({ code: v.code, layout: variantLayout(e.id, e.items, v) })), e.snapshot);
   });
   route('GET', '/api/exams/:id/docx', STAFF, async ({ user, params, query, ip }) => {
-    const e = db.get('SELECT * FROM exams WHERE id = ? AND school_id = ?', params.id, user.school_id);
-    if (!e) fail(404, 'Không tìm thấy đề.');
+    const e = visibleExam(user, params.id);
     const school = db.get('SELECT name FROM schools WHERE id = ?', user.school_id);
     const variants = e.variants.map((v) => ({ code: v.code, layout: variantLayout(e.id, e.items, v) }));
     const buf = await examToDocx({ title: e.title, school: school.name, durationMin: e.duration_min }, variants, e.snapshot, { withSolutions: query.solutions === '1', baseItems: e.items, imageResolver: imageResolver(user.school_id) });
@@ -1030,7 +1145,7 @@ export function createApp(config = {}) {
   });
   route('POST', '/api/assignments', STAFF, ({ user, body, ip }) => {
     const exam = db.get('SELECT * FROM exams WHERE id = ? AND school_id = ?', body.examId, user.school_id);
-    if (!exam) fail(400, 'Chọn đề để giao.');
+    if (!exam || (exam.visibility !== 'school' && exam.created_by !== user.id && user.role !== 'admin')) fail(400, 'Chọn đề để giao.');
     const classIds = (Array.isArray(body.classIds) ? body.classIds : [body.classId]).map(Number).filter(Boolean);
     if (!classIds.length) fail(400, 'Chọn ít nhất một lớp.');
     const mine = teacherClassIds(user);

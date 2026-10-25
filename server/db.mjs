@@ -93,6 +93,15 @@ CREATE TABLE IF NOT EXISTS score_appeals (
   note TEXT, resolution_json TEXT, resolved_by INTEGER, created_at INTEGER NOT NULL, resolved_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS appeal_att ON score_appeals(attempt_id, status);
+CREATE TABLE IF NOT EXISTS exam_ratings (
+  exam_id INTEGER NOT NULL, user_id INTEGER NOT NULL, stars INTEGER NOT NULL CHECK (stars BETWEEN 1 AND 5), comment TEXT, at INTEGER NOT NULL,
+  PRIMARY KEY (exam_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS comments (
+  id INTEGER PRIMARY KEY, school_id INTEGER NOT NULL, target_type TEXT NOT NULL CHECK (target_type IN ('question','exam')), target_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL, body TEXT NOT NULL, at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS cm_target ON comments(target_type, target_id);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY, school_id INTEGER, user_id INTEGER, action TEXT NOT NULL, detail TEXT, ip TEXT, at INTEGER NOT NULL
 );
@@ -107,6 +116,11 @@ const ADDED_COLUMNS = [
   ['review_items', 'due_day', 'TEXT'],
   ['review_items', 'last_day', 'TEXT'],
   ['assignments', 'target_json', 'TEXT'],
+  ['exams', 'visibility', "TEXT NOT NULL DEFAULT 'school'"],
+  ['exams', 'dept', 'TEXT'],
+  ['exams', 'parent_id', 'INTEGER'],
+  ['questions', 'approvals_json', 'TEXT'],
+  ['schools', 'review_policy', "TEXT NOT NULL DEFAULT 'single'"],
   ['questions', 'explanation_draft', 'TEXT'],
   ['questions', 'draft_check_json', 'TEXT'],
   ['audit_log', 'target', 'TEXT'],

@@ -215,3 +215,12 @@ Chi tiết số liệu và giới hạn ở `docs/do-chinh-xac.md`. `npm run che
 - **Khiếu nại điểm**: bảng `score_appeals`. Học sinh gửi từ trang kết quả (chỉ bài đã nộp, đã xem được kết quả, trong 14 ngày, lý do ≥ 10 ký tự, mỗi câu một khiếu nại đang chờ, tối đa 5). Giáo viên phụ trách lớp xem danh sách (`/khieu-nai`), chấp nhận (nhập điểm mới hoặc cho điểm cả câu) hoặc từ chối — ghi chú bắt buộc, một dòng nhật ký có điểm trước/sau. Người lớp khác / trường khác bị từ chối và được ghi nhận.
 
 **Chưa làm / hạn chế:** chấm lại không cập nhật lại lịch ôn giãn cách đã tính lúc nộp; sửa đáp án đề chưa tự sửa luôn ngân hàng câu hỏi (làm riêng ở Ngân hàng, có nhật ký); chưa có thông báo cho học sinh khi khiếu nại được trả lời (xem ở mục khiếu nại của em qua API `GET /api/student/appeals`, chưa có màn riêng); không có chế độ khóa máy — chống gian lận chỉ là tín hiệu.
+
+## 17. Giai đoạn 6 (phần a) — chia sẻ và duyệt (25/10/2026)
+
+`tests/sharing.test.mjs` (6 test) đạt; chưa chạy lại toàn bộ `npm run check` sau phần này.
+
+- **Đề riêng/dùng chung** (mục 22): đề mới mặc định riêng tư; `POST /api/exams/:id/share` (chỉ người ra đề/quản lý, có nhật ký); đề dùng chung cả trường xem, xuất Word, nhân bản, giao cho lớp mình; đề cũ được giữ là dùng chung (di trú). Nhãn tổ (`dept`) để lọc, `GET /api/exams?scope=mine|shared|hot`. Xếp "hot" = lượt giao bài + nhân bản + sao × √số người đánh giá; `POST /api/exams/:id/rate` (không tự đánh giá, không đánh giá đề riêng).
+- **Bình luận** (mục 23) trên câu hỏi và đề (chỉ thêm, chỉ giáo viên trong trường). **Duyệt hai người**: quản lý đặt `reviewPolicy = double` (`PUT /api/admin/settings`, có nhật ký); cần hai người khác nhau duyệt, ít nhất một người không phải tác giả; sửa nội dung câu đã duyệt thì phải duyệt lại.
+
+**Chưa làm (hết hạn mức sử dụng):** giao diện cho phần chia sẻ/xếp hạng/bình luận/duyệt hai người; mục 24 (báo cáo định kỳ, so sánh lớp/kỳ), mục 25 (cổng phụ huynh, PWA); giai đoạn 5 (giao diện — cần bạn chọn hướng thiết kế).
