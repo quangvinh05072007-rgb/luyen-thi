@@ -37,7 +37,7 @@ export function ClassView({ id }: { id: number }) {
   return (
     <div className="stack">
       <div className="row between">
-        <h1>Lớp {data.class.name}</h1>
+        <div><a className="small" href="#/lop-hoc">Về danh sách lớp</a><h1>Lớp {data.class.name}</h1></div>
         <a className="btn primary" href="#/ra-de">
           Ra đề cho lớp
         </a>

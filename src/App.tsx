@@ -11,6 +11,7 @@ import { ExamBuilder } from './pages/teacher/ExamBuilder';
 import { Exams, ExamDetail } from './pages/teacher/Exams';
 import { Assignments, Report } from './pages/teacher/Report';
 import { ClassView, StudentProfilePage, TeacherAttemptView } from './pages/teacher/ClassView';
+import { Classes } from './pages/teacher/Classes';
 import { StudentHome } from './pages/student/StudentHome';
 import { ExamRoom } from './pages/student/ExamRoom';
 import { ResultPage } from './pages/student/Result';
@@ -27,15 +28,17 @@ type Nav = { path: string; label: string; icon: string };
 const NAV: Record<User['role'], Nav[]> = {
   teacher: [
     { path: '/', label: 'Tổng quan', icon: 'home' },
+    { path: '/lop-hoc', label: 'Lớp học', icon: 'class' },
     { path: '/ngan-hang', label: 'Ngân hàng', icon: 'bank' },
-    { path: '/nhap-de', label: 'Nhập đề', icon: 'import' },
     { path: '/de-thi', label: 'Đề thi', icon: 'exam' },
+    { path: '/nhap-de', label: 'Nhập đề', icon: 'import' },
     { path: '/bai-giao', label: 'Kết quả', icon: 'report' },
     { path: '/khieu-nai', label: 'Khiếu nại', icon: 'log' },
     { path: '/bao-cao', label: 'Báo cáo định kỳ', icon: 'report' },
   ],
   admin: [
     { path: '/', label: 'Toàn trường', icon: 'school' },
+    { path: '/lop-hoc', label: 'Lớp học', icon: 'class' },
     { path: '/nguoi-dung', label: 'Người dùng', icon: 'user' },
     { path: '/ngan-hang', label: 'Ngân hàng', icon: 'bank' },
     { path: '/de-thi', label: 'Đề thi', icon: 'exam' },
@@ -116,6 +119,7 @@ export function App() {
           ['/bai-giao', () => <Assignments />],
           ['/khieu-nai', () => <Appeals />],
           ['/bao-cao', () => <PeriodicReports />],
+          ['/lop-hoc', () => <Classes />],
           ['/bai-giao/:id', ([id]) => <Report key={id} id={Number(id)} />],
           ['/lop/:id', ([id]) => <ClassView key={id} id={Number(id)} />],
           ['/hoc-sinh/:id', ([id]) => <StudentProfilePage key={id} id={Number(id)} />],
@@ -136,7 +140,7 @@ export function App() {
   const inExam = path.startsWith('/thi/');
   const mobileNav = nav.length > 5 ? nav.slice(0, 4) : nav;
   const moreNav = nav.length > 5 ? [...nav.slice(4), {path:'/tai-khoan',label:'Tài khoản',icon:'user'}] : [];
-  const isActive = (p: string) => (p === '/' ? path === '/' : path.startsWith(p));
+  const isActive = (p: string) => p === '/lop-hoc' ? path === p || path.startsWith('/lop/') || path.startsWith('/hoc-sinh/') : p === '/' ? path === '/' : path.startsWith(p);
 
   return (
     <AppCtx.Provider value={{ meta, user, refreshUser, toast }}>

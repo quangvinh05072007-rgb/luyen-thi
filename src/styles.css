@@ -234,6 +234,11 @@ table.t tr.click:hover td { background: var(--surface-2); }
 .slip { border: 1px dashed var(--ink-3); border-radius: 8px; padding: 10px 12px; break-inside: avoid; }
 .preserve-lines { white-space: pre-wrap; overflow-wrap: anywhere; }
 .grow { flex: 1; min-width: 0; }
+.class-link { display: block; color: var(--ink); box-shadow: none; }
+.class-link:hover { text-decoration: none; border-color: var(--primary); background: var(--surface-2); }
+.class-link > .row > svg { width: 20px; height: 20px; color: var(--primary); }
+.class-link h2 { margin: 0; }
+.grid-2 > .class-link { margin-top: 0; }
 .comment { border-left: 3px solid var(--primary-soft); padding: 8px 14px; background: var(--surface-2); border-radius: 0 8px 8px 0; }
 .comment p { margin: 8px 0 0; }
 .version-item { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
