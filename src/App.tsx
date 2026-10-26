@@ -169,11 +169,34 @@ export function App() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m9 3-1 3-3 1-2 3 2 2-1 3 2 3 3-1 2 3h3l1-3 3-1 2-3-2-2 1-3-2-3-3 1-2-3Z" /><circle cx="11.5" cy="11.5" r="3" /></svg>
               <span className="rail-label">Tài khoản & cài đặt</span>
             </a>
+            <div className="sidebar-profile-card">
+              <details className="account-menu sidebar-account-menu" onKeyDown={e=>{if(e.key==='Escape')e.currentTarget.open=false;}}>
+                <summary>
+                  <span className="workspace-avatar" aria-hidden="true">{initials}</span>
+                  <div className="sidebar-account-info">
+                    <strong className="sidebar-account-name">{user.displayName}</strong>
+                    <small className="sidebar-account-role">{roleLabel}</small>
+                  </div>
+                  <div className="sidebar-locale-badge" title="Ngôn ngữ: Tiếng Việt">
+                    <svg className="workspace-locale" width="18" height="12" viewBox="0 0 30 20" role="img" aria-label="Tiếng Việt">
+                      <path fill="#da251d" d="M0 0h30v20H0z"/>
+                      <path fill="#ff0" d="m15 3 1.6 4.9h5.2l-4.2 3 1.6 4.9-4.2-3-4.2 3 1.6-4.9-4.2-3h5.2Z"/>
+                    </svg>
+                  </div>
+                  <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true" style={{color:'var(--sidebar-text)',marginLeft:2}}><path d="m6 8 4 4 4-4"/></svg>
+                </summary>
+                <div className="account-options sidebar-options" onClick={e=>{(e.currentTarget.parentElement as HTMLDetailsElement).open=false;}}>
+                  <a href="#/tai-khoan">Cài đặt tài khoản</a>
+                  {user.role==='admin'&&<><a href="#/nguoi-dung">Người dùng & phân công</a><a href="#/nhat-ky">Nhật ký</a><a href="#/bao-cao">Báo cáo toàn trường</a></>}
+                  <button onClick={logout}>Đăng xuất</button>
+                </div>
+              </details>
+            </div>
           </aside>
         )}
         <main className={`main${inExam ? '' : ' workspace-main'}${classScreen ? ' class-management-main' : ''}`} id="main-content" tabIndex={-1}>
           {!inExam && (
-            <div className="topbar workspace-topbar">
+            <div className={`topbar workspace-topbar${classScreen ? ' has-class-context' : ''}`}>
               {classScreen && <a className="workspace-back" href={path === '/lop-hoc' ? '#/' : '#/lop-hoc'}><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m12 5-5 5 5 5" /></svg>Quay lại</a>}
               {classScreen && path !== '/lop-hoc' && <span className="workspace-class-context">{path.includes('/ket-qua') ? 'Bảng điểm và báo cáo' : path.includes('/bai-giao') ? 'Bài tập, đề thi' : path.includes('/cai-dat') ? 'Cài đặt lớp' : 'Danh sách học sinh'}</span>}
               <a className="brand" href="#/">
@@ -183,18 +206,13 @@ export function App() {
                 </div>
               </a>
               <div className="grow" />
-              <div className="workspace-locale-pill" title="Ngôn ngữ: Tiếng Việt" tabIndex={0}>
+              <div className="mobile-topbar-profile">
                 <svg className="workspace-locale" width="20" height="14" viewBox="0 0 30 20" role="img" aria-label="Tiếng Việt"><path fill="#da251d" d="M0 0h30v20H0z"/><path fill="#ff0" d="m15 3 1.6 4.9h5.2l-4.2 3 1.6 4.9-4.2-3-4.2 3 1.6-4.9-4.2-3h5.2Z"/></svg>
-                <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true" style={{color:'var(--ink-3)'}}><path d="m6 8 4 4 4-4"/></svg>
+                <details className="account-menu" onKeyDown={e=>{if(e.key==='Escape')e.currentTarget.open=false;}}>
+                  <summary><span className="workspace-avatar" aria-hidden="true">{initials}</span></summary>
+                  <div className="account-options" onClick={e=>{(e.currentTarget.parentElement as HTMLDetailsElement).open=false;}}><a href="#/tai-khoan">Tài khoản</a>{user.role==='admin'&&<><a href="#/nguoi-dung">Người dùng & phân công</a><a href="#/nhat-ky">Nhật ký</a><a href="#/bao-cao">Báo cáo toàn trường</a></>}<button onClick={logout}>Đăng xuất</button></div>
+                </details>
               </div>
-              <details className="account-menu" onKeyDown={e=>{if(e.key==='Escape')e.currentTarget.open=false;}}>
-                <summary>
-                  <span className="workspace-avatar" aria-hidden="true">{initials}</span>
-                  <span className="workspace-account-name"><strong>{user.displayName}</strong><small>{roleLabel}</small></span>
-                  <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true" style={{color:'var(--ink-3)',marginLeft:4}}><path d="m6 8 4 4 4-4"/></svg>
-                </summary>
-                <div className="account-options" onClick={e=>{(e.currentTarget.parentElement as HTMLDetailsElement).open=false;}}><a href="#/tai-khoan">Tài khoản</a>{user.role==='admin'&&<><a href="#/nguoi-dung">Người dùng & phân công</a><a href="#/nhat-ky">Nhật ký</a><a href="#/bao-cao">Báo cáo toàn trường</a></>}<button onClick={logout}>Đăng xuất</button></div>
-              </details>
             </div>
           )}
           <div className={inExam ? undefined : 'workspace-content'}>

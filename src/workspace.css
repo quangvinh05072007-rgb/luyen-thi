@@ -715,3 +715,130 @@
   height: 17px;
   flex-shrink: 0;
 }
+
+/* ---------------- Sidebar Profile Footer ---------------- */
+.sidebar-profile-card {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #1e293b;
+}
+
+.sidebar-account-menu {
+  position: relative;
+}
+
+.sidebar-account-menu summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  list-style: none;
+  transition: all 0.15s ease;
+}
+
+.sidebar-account-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.sidebar-account-menu summary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.sidebar-account-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.sidebar-account-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.sidebar-account-role {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.sidebar-locale-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.sidebar-options {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  top: auto;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  padding: 6px;
+  z-index: 100;
+}
+
+.sidebar-options a,
+.sidebar-options button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #cbd5e1;
+  text-decoration: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.sidebar-options a:hover,
+.sidebar-options button:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+/* On desktop, hide topbar unless it has class context */
+@media (min-width: 900px) {
+  .workspace-topbar:not(.has-class-context) {
+    display: none !important;
+  }
+  .mobile-topbar-profile {
+    display: none !important;
+  }
+}
+
+@media (max-width: 899px) {
+  .sidebar-profile-card {
+    display: none !important;
+  }
+  .mobile-topbar-profile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
