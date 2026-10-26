@@ -157,7 +157,9 @@ export function App() {
         {!inExam && (
           <aside className="sidebar">
             <a className="brand workspace-brand" href="#/" aria-label="SmartExam — Trang chủ" title="SmartExam">
-              <AzotaLogo size={44} />
+              <AzotaLogo size={32} />
+              <span className="brand-title">SmartExam</span>
+              <span className="brand-badge">AI</span>
             </a>
             {nav.map((n) => (
               <a key={n.path} href={`#${n.path}`} aria-label={n.label} aria-current={isActive(n.path) ? 'page' : undefined} className={`nav ${isActive(n.path) ? 'active' : ''}`}>

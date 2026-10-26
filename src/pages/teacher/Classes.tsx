@@ -28,13 +28,10 @@ export function Classes() {
     () => get<ClassesResponse>(`/api/classes${scope === 'all' ? '?scope=all' : ''}`),
     [scope]
   );
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [sortDescending, setSortDescending] = useState(false);
-  const [groupByGrade, setGroupByGrade] = useState(true);
-  const [showCodes, setShowCodes] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newGrade, setNewGrade] = useState(12);
@@ -94,50 +91,284 @@ export function Classes() {
     }
   };
 
-  const sortedClasses = [...filtered].sort((a, b) => (sortDescending ? -1 : 1) * a.name.localeCompare(b.name, 'vi', { numeric: true }));
-  const groups = groupByGrade
-    ? [12, 11, 10].map(grade => ({ key: String(grade), label: `Khối ${grade}`, classes: sortedClasses.filter(c => c.grade === grade) })).filter(group => group.classes.length)
-    : [{ key: 'all', label: 'Tất cả', classes: sortedClasses }];
-  const allCollapsed = groups.length > 0 && groups.every(group => collapsedGroups.has(group.key));
-  const toggleGroup = (key: string) => setCollapsedGroups(current => {
-    const next = new Set(current);
-    next.has(key) ? next.delete(key) : next.add(key);
-    return next;
-  });
+  const sortedClasses = [...filtered].sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true }));
 
   return (
     <div className="class-directory">
+      {/* Header */}
       <header className="directory-heading">
-        <div><h1>Danh sách lớp</h1><p role="status" title={`${totalStudents} học sinh · ${totalActiveExams} bài thi đang mở`}>{loading ? 'Đang tải…' : `${filtered.length} lớp`}</p></div>
+        <div>
+          <h1>Quản lý Lớp học</h1>
+          <p>
+            {classes.length} lớp học · {totalStudents} học sinh
+            {totalActiveExams > 0 ? ` · ${totalActiveExams} bài thi đang mở` : ''}
+          </p>
+        </div>
         <div className="directory-heading-actions">
-          <button type="button" className="btn primary" onClick={() => setShowCreate(true)}><Icon name="plus" />Thêm</button>
-          <button type="button" className={`btn${filtersOpen ? ' is-selected' : ''}`} onClick={() => setFiltersOpen(value => !value)} aria-expanded={filtersOpen} aria-controls="directory-filters"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M3 4h18l-7 8v7l-4-2v-5Z" /></svg>Bộ lọc{selectedGrade !== 'all' && <span className="directory-filter-dot" />}</button>
-          <details className="directory-settings" onKeyDown={e => { if (e.key === 'Escape') e.currentTarget.open = false; }}>
-            <summary className="btn directory-icon-button" aria-label="Tùy chọn hiển thị lớp" title="Tùy chọn hiển thị"><Icon name="gear" /></summary>
-            <div className="directory-settings-panel"><strong>Hiển thị danh sách</strong><label className="check"><input type="checkbox" checked={groupByGrade} onChange={e => {setGroupByGrade(e.target.checked);setCollapsedGroups(new Set());}} />Nhóm lớp theo khối</label><label className="check"><input type="checkbox" checked={showCodes} onChange={e => setShowCodes(e.target.checked)} />Hiện mã tham gia</label>{user.role === 'admin' && <a href="#/nguoi-dung">Quản lý tài khoản và phân công</a>}</div>
-          </details>
+          {user.role === 'admin' && (
+            <div className="seg" style={{ marginRight: 6 }}>
+              <button
+                type="button"
+                className={scope === 'mine' ? 'on' : ''}
+                onClick={() => setScope('mine')}
+              >
+                Lớp của tôi
+              </button>
+              <button
+                type="button"
+                className={scope === 'all' ? 'on' : ''}
+                onClick={() => setScope('all')}
+              >
+                Toàn trường ({data?.totalAllCount ?? classes.length})
+              </button>
+            </div>
+          )}
+          <button type="button" className="btn primary" onClick={() => setShowCreate(true)}>
+            <Icon name="plus" /> Tạo lớp mới
+          </button>
         </div>
       </header>
-      <div className="directory-searchbar">
-        <label className="directory-search"><input type="search" aria-label="Tìm lớp học" placeholder="Tìm kiếm theo tên lớp, mã hoặc giáo viên" value={search} onChange={e => setSearch(e.target.value)} /><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg></label>
-        <button type="button" className="btn directory-sort" onClick={() => setSortDescending(value => !value)} aria-label={sortDescending ? 'Sắp xếp tên lớp tăng dần' : 'Sắp xếp tên lớp giảm dần'}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M7 4v16m-4-4 4 4 4-4M17 20V4m-4 4 4-4 4 4" /></svg>Sắp xếp theo tên<span className="directory-sort-direction">{sortDescending ? 'Z–A' : 'A–Z'}</span></button>
-        <button type="button" className="btn directory-icon-button" aria-label={allCollapsed ? 'Mở tất cả nhóm lớp' : 'Thu gọn tất cả nhóm lớp'} onClick={() => setCollapsedGroups(allCollapsed ? new Set() : new Set(groups.map(group => group.key)))}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d={allCollapsed ? 'm8 8 4 4 4-4m-8 6 4 4 4-4' : 'm8 9 4-4 4 4m-8 6 4 4 4-4'} /></svg></button>
+
+      {/* Unified Toolbar */}
+      <div className="directory-toolbar">
+        {/* Grade Pills */}
+        <div className="grade-pills">
+          <button
+            type="button"
+            className={`grade-pill ${selectedGrade === 'all' ? 'active' : ''}`}
+            onClick={() => setSelectedGrade('all')}
+          >
+            Tất cả ({gradeCounts.all})
+          </button>
+          {([12, 11, 10] as const).map((g) => (
+            <button
+              key={g}
+              type="button"
+              className={`grade-pill ${selectedGrade === String(g) ? 'active' : ''}`}
+              onClick={() => setSelectedGrade(String(g))}
+            >
+              Khối {g} ({gradeCounts[g]})
+            </button>
+          ))}
+        </div>
+
+        {/* Search & View Mode */}
+        <div className="directory-toolbar-right">
+          <div className="directory-search-input">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="search"
+              aria-label="Tìm kiếm lớp học"
+              placeholder="Tìm tên lớp, mã, giáo viên…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 0 }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <div className="view-mode-toggle">
+            <button
+              type="button"
+              className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
+              onClick={() => setViewMode('grid')}
+              title="Dạng lưới thẻ"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+              </svg>
+              Lưới
+            </button>
+            <button
+              type="button"
+              className={`view-mode-btn ${viewMode === 'table' ? 'active' : ''}`}
+              onClick={() => setViewMode('table')}
+              title="Dạng danh sách bảng"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" />
+              </svg>
+              Bảng
+            </button>
+          </div>
+        </div>
       </div>
-      {filtersOpen && <section className="directory-filters" id="directory-filters" aria-label="Bộ lọc lớp học">
-        <div><span>Phạm vi</span><div className="seg"><button type="button" aria-pressed={scope === 'mine'} className={scope === 'mine' ? 'on' : ''} onClick={() => setScope('mine')}>Lớp của tôi{data?.myCount !== undefined ? ` (${data.myCount})` : ''}</button><button type="button" aria-pressed={scope === 'all'} className={scope === 'all' ? 'on' : ''} onClick={() => setScope('all')}>Toàn trường{data?.totalAllCount !== undefined ? ` (${data.totalAllCount})` : ''}</button></div></div>
-        <label className="field"><span>Khối lớp</span><select className="select" value={selectedGrade} onChange={e => setSelectedGrade(e.target.value)}><option value="all">Tất cả ({gradeCounts.all})</option>{([12, 11, 10] as const).map(grade => <option key={grade} value={grade}>Khối {grade} ({gradeCounts[grade]})</option>)}</select></label>
-        <button type="button" className="btn ghost" onClick={() => {setSelectedGrade('all');setSearch('');}}>Xóa bộ lọc</button>
-      </section>}
+
       {loading && <Loading text="Đang tải lớp học…" />}
       {error && <ErrorBox error={error} onRetry={reload} />}
-      {data && filtered.length === 0 && <div className="directory-empty"><Icon name="class" /><h2>{classes.length ? 'Không tìm thấy lớp phù hợp' : 'Chưa có lớp học'}</h2><p>{classes.length ? 'Thử từ khóa khác hoặc thay đổi bộ lọc.' : 'Tạo lớp mới và chia sẻ mã tham gia với học sinh.'}</p><div className="row">{classes.length > 0 && <button type="button" className="btn" onClick={() => {setSearch('');setSelectedGrade('all');}}>Xóa bộ lọc</button>}{scope === 'mine' && <button type="button" className="btn" onClick={() => setScope('all')}>Xem toàn trường</button>}<button type="button" className="btn primary" onClick={() => setShowCreate(true)}><Icon name="plus" />Thêm lớp</button></div></div>}
-      {data && filtered.length > 0 && <div className="directory-groups">{groups.map(group => <section key={group.key} className="directory-group">
-        <button type="button" className="directory-group-toggle" onClick={() => toggleGroup(group.key)} aria-expanded={!collapsedGroups.has(group.key)} aria-controls={`class-group-${group.key}`}><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d={collapsedGroups.has(group.key) ? 'm7 4 6 6-6 6' : 'm4 7 6 6 6-6'} /></svg>{group.label} ({group.classes.length} lớp)</button>
-        <div id={`class-group-${group.key}`} className="directory-class-grid" hidden={collapsedGroups.has(group.key)}>{group.classes.map(c => <article key={c.id} className="directory-class-card">
-          <a className="directory-class-open" href={`#/lop/${c.id}`} aria-label={`Vào lớp ${c.name}`}><h2>{c.name}</h2><div className="directory-class-meta"><span>Sĩ số: {c.students}</span><span>Khối {c.grade}</span></div>{showCodes && c.code && <p className="directory-visible-code">Mã: {c.code}</p>}</a>
-          <details className="directory-class-menu" onKeyDown={e => {if(e.key === 'Escape') e.currentTarget.open = false;}} onBlur={e => {if(!e.currentTarget.contains(e.relatedTarget as Node | null)) e.currentTarget.open = false;}}><summary aria-label={`Thao tác lớp ${c.name}`} title={`Thao tác lớp ${c.name}`}><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></summary><div className="directory-class-menu-panel"><p>{c.teacher ?? 'Chưa phân công giáo viên'}{(c.active_assignments ?? 0) > 0 && <span>{c.active_assignments} bài thi đang mở</span>}</p><a href={`#/lop/${c.id}`}><Icon name="class" />Vào lớp</a><a href={`#/thu-vien?classId=${c.id}`}><Icon name="exam" />Giao đề</a><a href={`#/lop/${c.id}/ket-qua`}><Icon name="chart" />Bảng điểm</a>{c.code && <button type="button" onClick={() => copyCode(c.code!)}><Icon name="file" />Sao chép mã lớp</button>}<a href={`#/lop/${c.id}/cai-dat`}><Icon name="gear" />Cài đặt lớp</a></div></details>
-        </article>)}</div>
-      </section>)}</div>}
+
+      {/* Empty State */}
+      {data && filtered.length === 0 && (
+        <div className="card flat" style={{ padding: '48px 24px', textAlign: 'center', background: '#fff' }}>
+          <div style={{ color: '#94a3b8', marginBottom: 12 }}>
+            <Icon name="class" />
+          </div>
+          <h2 style={{ fontSize: 16, margin: '0 0 6px 0' }}>
+            {classes.length ? 'Không tìm thấy lớp phù hợp' : 'Chưa có lớp học nào'}
+          </h2>
+          <p className="tiny muted" style={{ margin: '0 0 16px 0' }}>
+            {classes.length ? 'Thử xóa từ khóa tìm kiếm hoặc chọn khối lớp khác.' : 'Bắt đầu bằng việc tạo lớp mới để giao đề và kiểm tra.'}
+          </p>
+          <div className="row" style={{ justifyContent: 'center', gap: 8 }}>
+            {classes.length > 0 && (
+              <button type="button" className="btn" onClick={() => { setSearch(''); setSelectedGrade('all'); }}>
+                Xóa bộ lọc
+              </button>
+            )}
+            <button type="button" className="btn primary" onClick={() => setShowCreate(true)}>
+              <Icon name="plus" /> Tạo lớp mới
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Grid View */}
+      {data && filtered.length > 0 && viewMode === 'grid' && (
+        <div className="classes-card-grid">
+          {sortedClasses.map((c) => (
+            <article key={c.id} className="class-card">
+              <div className={`class-card-banner grade-${c.grade}`}>
+                <span className="class-card-name">{c.name}</span>
+                <span className="class-card-grade-badge">Khối {c.grade}</span>
+              </div>
+
+              <div className="class-card-body">
+                <div className="class-card-stat">
+                  <span>👥 Sĩ số: <b>{c.students} học sinh</b></span>
+                  <span className="tiny muted">{c.teacher || 'Chưa phân công'}</span>
+                </div>
+
+                {c.code && (
+                  <div className="class-card-code-row">
+                    <span>Mã tham gia: <span className="class-card-code-val">{c.code}</span></span>
+                    <button
+                      type="button"
+                      className="class-card-copy-btn"
+                      onClick={() => copyCode(c.code!)}
+                      title="Sao chép mã vào clipboard"
+                    >
+                      Chép mã
+                    </button>
+                  </div>
+                )}
+
+                {(c.active_assignments ?? 0) > 0 && (
+                  <div className="class-active-exam-badge">
+                    <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
+                    {c.active_assignments} bài thi đang mở
+                  </div>
+                )}
+              </div>
+
+              <div className="class-card-footer">
+                <a className="btn primary sm" href={`#/lop/${c.id}`}>
+                  Vào lớp →
+                </a>
+                <a className="btn sm ghost" href={`#/thu-vien?classId=${c.id}`}>
+                  Giao đề
+                </a>
+                <a className="btn sm ghost" href={`#/lop/${c.id}/ket-qua`}>
+                  Điểm
+                </a>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      {/* Table View */}
+      {data && filtered.length > 0 && viewMode === 'table' && (
+        <div className="classes-table-card">
+          <table className="classes-table">
+            <thead>
+              <tr>
+                <th>Lớp học</th>
+                <th>Khối</th>
+                <th>Sĩ số</th>
+                <th>Mã tham gia</th>
+                <th>Giáo viên</th>
+                <th>Trạng thái</th>
+                <th style={{ textAlign: 'right' }}>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedClasses.map((c) => (
+                <tr key={c.id}>
+                  <td className="class-name-cell">
+                    <a href={`#/lop/${c.id}`} style={{ color: '#1e40af', textDecoration: 'none' }}>
+                      {c.name}
+                    </a>
+                  </td>
+                  <td>
+                    <span className={`badge sm ${c.grade === 12 ? 'blue' : c.grade === 11 ? 'green' : 'purple'}`}>
+                      Khối {c.grade}
+                    </span>
+                  </td>
+                  <td><b>{c.students}</b> em</td>
+                  <td>
+                    {c.code ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <code style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, color: '#1e40af', fontWeight: 600 }}>
+                          {c.code}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => copyCode(c.code!)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', padding: 0, fontSize: 11 }}
+                          title="Sao chép"
+                        >
+                          📋
+                        </button>
+                      </span>
+                    ) : '—'}
+                  </td>
+                  <td className="tiny muted">{c.teacher || 'Chưa phân công'}</td>
+                  <td>
+                    {(c.active_assignments ?? 0) > 0 ? (
+                      <span className="badge green sm">🟢 {c.active_assignments} bài mở</span>
+                    ) : (
+                      <span className="tiny muted">{c.total_assignments ?? 0} bài</span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div className="row end" style={{ gap: 4 }}>
+                      <a className="btn sm" href={`#/lop/${c.id}`} style={{ padding: '3px 8px', fontSize: 11.5 }}>
+                        Vào lớp
+                      </a>
+                      <a className="btn sm ghost" href={`#/thu-vien?classId=${c.id}`} style={{ padding: '3px 8px', fontSize: 11.5 }}>
+                        Giao đề
+                      </a>
+                      <a className="btn sm ghost" href={`#/lop/${c.id}/ket-qua`} style={{ padding: '3px 8px', fontSize: 11.5 }}>
+                        Bảng điểm
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Modal tạo lớp mới */}
       {showCreate && (
         <Modal title="Tạo lớp học mới" onClose={() => setShowCreate(false)}>
           <form onSubmit={handleCreateClass} className="stack" style={{ gap: 14 }}>
@@ -188,3 +419,4 @@ export function Classes() {
     </div>
   );
 }
+export default Classes;
