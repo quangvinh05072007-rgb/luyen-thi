@@ -241,6 +241,18 @@
   color: #0f172a;
 }
 
+.workspace-locale {
+  width: 24px;
+  height: 16px;
+  min-width: 24px;
+  max-width: 24px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  display: inline-block;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  vertical-align: middle;
+}
+
 .workspace-topbar .account-menu {
   position: relative;
 }

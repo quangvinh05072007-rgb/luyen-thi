@@ -30,11 +30,9 @@ type Nav = { path: string; label: string; icon: string };
 const NAV: Record<User['role'], Nav[]> = {
   teacher: [
     { path: '/', label: 'Tổng quan', icon: 'home' },
-    { path: '/thu-vien', label: 'Đề & câu hỏi', icon: 'exam' },
-    { path: '/nhap-de', label: 'Nhập đề', icon: 'import' },
-    { path: '/ra-de', label: 'Tạo đề', icon: 'edit' },
     { path: '/lop-hoc', label: 'Lớp học', icon: 'class' },
-    { path: '/ngan-hang', label: 'Ngân hàng câu hỏi', icon: 'book' },
+    { path: '/thu-vien', label: 'Kho đề thi', icon: 'exam' },
+    { path: '/ngan-hang', label: 'Ngân hàng', icon: 'book' },
   ],
   admin: [
     { path: '/', label: 'Toàn trường', icon: 'school' },
@@ -146,7 +144,7 @@ export function App() {
   const classScreen = user.role !== 'student' && (path === '/lop-hoc' || path.startsWith('/lop/'));
   const mobileNav = nav.length > 5 ? nav.filter(n => ['/', '/lop-hoc', '/thu-vien'].includes(n.path)) : nav;
   const moreNav = nav.length > 5 ? [...nav.filter(n => !mobileNav.includes(n)), {path:'/tai-khoan',label:'Tài khoản',icon:'user'}] : [];
-  const isActive = (p: string) => p === '/lop-hoc' ? path === p || ['/lop/','/hoc-sinh/','/bai-giao','/bai-lam/','/khieu-nai'].some(prefix=>path.startsWith(prefix)) : p === '/thu-vien' ? ['/thu-vien','/de-thi', ...(user.role === 'admin' ? ['/ngan-hang','/nhap-de','/ra-de'] : [])].some(prefix=>path.startsWith(prefix)) : p === '/ket-qua' ? ['/ket-qua','/tien-bo','/khieu-nai'].some(prefix=>path.startsWith(prefix)) : p === '/' ? path === '/' : path.startsWith(p);
+  const isActive = (p: string) => p === '/lop-hoc' ? path === p || ['/lop/','/hoc-sinh/','/bai-giao','/bai-lam/','/khieu-nai'].some(prefix=>path.startsWith(prefix)) : p === '/thu-vien' ? ['/thu-vien','/de-thi','/nhap-de','/ra-de'].some(prefix=>path.startsWith(prefix)) : p === '/ket-qua' ? ['/ket-qua','/tien-bo','/khieu-nai'].some(prefix=>path.startsWith(prefix)) : p === '/' ? path === '/' : path.startsWith(p);
   const roleLabel = {admin:'Quản lý trường',teacher:'Giáo viên',student:'Học sinh'}[user.role];
   const initials = user.displayName.trim().split(/\s+/).slice(-2).map(part => part[0]).join('');
 
@@ -185,8 +183,7 @@ export function App() {
                 </div>
               </a>
               <div className="grow" />
-              {user.role !== 'student' && <div className="workspace-top-actions"><a href="#/ra-de" className="workspace-top-action"><Icon name="plus" />Tạo đề mới</a><a href="#/nhap-de" className="workspace-top-action secondary"><Icon name="upload" />Nhập đề</a></div>}
-              <svg className="workspace-locale" viewBox="0 0 30 20" role="img" aria-label="Tiếng Việt"><path fill="#da251d" d="M0 0h30v20H0z"/><path fill="#ff0" d="m15 3 1.6 4.9h5.2l-4.2 3 1.6 4.9-4.2-3-4.2 3 1.6-4.9-4.2-3h5.2Z"/></svg>
+              <svg className="workspace-locale" width="24" height="16" viewBox="0 0 30 20" role="img" aria-label="Tiếng Việt"><path fill="#da251d" d="M0 0h30v20H0z"/><path fill="#ff0" d="m15 3 1.6 4.9h5.2l-4.2 3 1.6 4.9-4.2-3-4.2 3 1.6-4.9-4.2-3h5.2Z"/></svg>
               <details className="account-menu" onKeyDown={e=>{if(e.key==='Escape')e.currentTarget.open=false;}}>
                 <summary><span className="workspace-avatar" aria-hidden="true">{initials}</span><span className="workspace-account-name"><strong>{user.displayName}</strong><small>{roleLabel}</small></span></summary>
                 <div className="account-options" onClick={e=>{(e.currentTarget.parentElement as HTMLDetailsElement).open=false;}}><a href="#/tai-khoan">Tài khoản</a>{user.role==='admin'&&<><a href="#/nguoi-dung">Người dùng & phân công</a><a href="#/nhat-ky">Nhật ký</a><a href="#/bao-cao">Báo cáo toàn trường</a></>}<button onClick={logout}>Đăng xuất</button></div>
