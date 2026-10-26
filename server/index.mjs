@@ -66,8 +66,12 @@ export function startServer({ port, viteMiddleware } = {}) {
   };
   materializeReports();
   setInterval(materializeReports, 60 * 1000).unref();
-  const stop = () => {
-    server.close();
+  let stopping=false;
+  const stop = async () => {
+    if(stopping)return;stopping=true;
+    const closed=new Promise(resolve=>server.close(resolve));
+    await app.importJobs.close();
+    await closed;
     app.db.close();
     process.exit(0);
   };

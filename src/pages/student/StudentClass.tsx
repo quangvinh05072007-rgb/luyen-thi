@@ -94,25 +94,25 @@ export function StudentClass() {
   if (!data?.class) {
     return (
       <div className="stack" style={{ maxWidth: 580, margin: '20px auto' }}>
-        <div className="card shadow" style={{ padding: 32, textAlign: 'center' }}>
+        <div className="card shadow" style={{ padding: 20, textAlign: 'center' }}>
           <div
             style={{
-              width: 72,
-              height: 72,
+              width: 44,
+              height: 44,
               borderRadius: '50%',
               background: '#e6f4ff',
               color: 'var(--primary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 34,
+              fontSize: 22,
               margin: '0 auto 16px',
             }}
           >
-            🏫
+            <Icon name="school" />
           </div>
           <h1 style={{ fontSize: 22, margin: '0 0 8px' }}>Tham gia lớp học</h1>
-          <p className="muted" style={{ margin: '0 0 24px', lineHeight: 1.5 }}>
+          <p className="muted" style={{ margin: '0 0 14px', lineHeight: 1.5 }}>
             Nhập <strong>Mã tham gia lớp</strong> do giáo viên bộ môn hoặc giáo viên chủ nhiệm cung cấp để nhận bài tập, đề kiểm tra và theo dõi tiến độ cùng cả lớp.
           </p>
 
@@ -129,14 +129,14 @@ export function StudentClass() {
               <input
                 className="input"
                 style={{
-                  fontSize: 18,
+                  fontSize: 15,
                   fontWeight: 700,
                   letterSpacing: '1px',
                   textAlign: 'center',
                   textTransform: 'uppercase',
-                  height: 48,
+                  height: 40,
                 }}
-                placeholder="VD: 12A1-2026"
+                placeholder="Nhập mã giáo viên cung cấp"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 autoFocus
@@ -145,14 +145,14 @@ export function StudentClass() {
               <button
                 type="submit"
                 className="btn primary"
-                style={{ height: 48, padding: '0 24px', fontSize: 16 }}
+                style={{ height: 40, padding: '0 14px', fontSize: 13 }}
                 disabled={busy || !joinCode.trim()}
               >
                 {busy ? 'Đang vào…' : 'Vào lớp →'}
               </button>
             </div>
             <div className="tiny muted">
-              Gợi ý mã lớp mẫu để thử nghiệm: <code>12A1-2026</code> hoặc <code>12A2-2026</code>
+              Mã tham gia do giáo viên cung cấp. Bạn có thể sao chép và dán mã vào đây.
             </div>
           </form>
         </div>
@@ -173,98 +173,23 @@ export function StudentClass() {
   const homeworkCount = assignments.filter((a) => a.mode === 'homework').length;
 
   return (
-    <div className="stack" style={{ gap: 20 }}>
-      {/* Class Header Banner */}
-      <div
-        className="card"
-        style={{
-          background: 'linear-gradient(135deg, #f0f7ff 0%, #e6f4ff 100%)',
-          border: '1px solid #bae0ff',
-          padding: 24,
-          borderRadius: 14,
-        }}
-      >
-        <div className="row between wrap" style={{ gap: 16, alignItems: 'center' }}>
-          <div className="row" style={{ gap: 16, alignItems: 'center' }}>
-            <div
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 14,
-                background: '#1677ff',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 28,
-                flexShrink: 0,
-                boxShadow: '0 4px 12px rgba(22, 119, 255, 0.25)',
-              }}
-            >
-              🏫
-            </div>
+    <div className="stack" style={{ gap: 12 }}>
+      <header className="page-intro">
+        <div className="row between" style={{ gap: 16 }}>
+          <div className="row" style={{ gap: 16 }}>
+            <span className="page-intro-icon"><Icon name="class" /></span>
             <div>
-              <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <h1 style={{ margin: 0, fontSize: 22, color: '#002c8c' }}>Lớp {cls.name}</h1>
-                <span className="badge blue" style={{ background: '#d6e4ff', color: '#0958d9', fontWeight: 600 }}>
-                  Khối {cls.grade}
-                </span>
-                <span className="badge" style={{ background: '#fff', border: '1px solid #d9d9d9' }}>
-                  👥 Sĩ số: {cls.students} bạn
-                </span>
-              </div>
-              <div className="tiny muted" style={{ marginTop: 6, fontSize: 13, color: '#4b5563' }}>
-                Giáo viên phụ trách: <strong style={{ color: '#1f2937' }}>{cls.teacher ?? 'Thầy/Cô bộ môn'}</strong>
-              </div>
+              <div className="row"><h1>Lớp {cls.name}</h1><span className="badge blue">Khối {cls.grade}</span><span className="badge">{cls.students} học sinh</span></div>
+              <p className="page-intro-description">Giáo viên phụ trách: <strong>{cls.teacher ?? 'Thầy/Cô bộ môn'}</strong></p>
             </div>
           </div>
-
-          <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div
-              className="row"
-              style={{
-                background: '#fff',
-                border: '1px dashed #1677ff',
-                padding: '6px 12px',
-                borderRadius: 8,
-                alignItems: 'center',
-                gap: 8,
-              }}
-            >
-              <span className="tiny" style={{ color: '#595959' }}>Mã lớp:</span>
-              <strong style={{ fontSize: 15, letterSpacing: '0.8px', color: '#1677ff' }}>{cls.code}</strong>
-              <button
-                type="button"
-                className="btn sm"
-                style={{ padding: '2px 8px', height: 'auto', fontSize: 11 }}
-                onClick={() => {
-                  navigator.clipboard?.writeText(cls.code);
-                  toast(`Đã chép mã lớp ${cls.code}`);
-                }}
-              >
-                Sao chép
-              </button>
-            </div>
-
-            <button
-              type="button"
-              className="btn sm"
-              onClick={() => setShowSwitchModal(true)}
-              style={{ background: '#fff' }}
-            >
-              Đổi lớp
-            </button>
-            <button
-              type="button"
-              className="btn sm danger"
-              onClick={() => setConfirmLeave(true)}
-              style={{ background: '#fff' }}
-            >
-              Rời lớp
-            </button>
+          <div className="row" style={{ gap: 10 }}>
+            <div className="row page-code"><span className="tiny muted">Mã lớp</span><strong>{cls.code}</strong><button type="button" className="btn ghost sm" onClick={() => { navigator.clipboard?.writeText(cls.code); toast(`Đã chép mã lớp ${cls.code}`); }}>Sao chép</button></div>
+            <button type="button" className="btn sm" onClick={() => setShowSwitchModal(true)}>Đổi lớp</button>
+            <button type="button" className="btn sm danger" onClick={() => setConfirmLeave(true)}>Rời lớp</button>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Switch Class Modal */}
       {showSwitchModal && (
@@ -286,7 +211,7 @@ export function StudentClass() {
               <input
                 className="input"
                 style={{ textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700 }}
-                placeholder="VD: 12A2-2026"
+                placeholder="Nhập mã lớp mới"
                 value={switchCode}
                 onChange={(e) => setSwitchCode(e.target.value.toUpperCase())}
                 autoFocus
@@ -361,7 +286,7 @@ export function StudentClass() {
 
         {filteredAssignments.length === 0 ? (
           <div className="card empty" style={{ padding: '36px 20px', textAlign: 'center' }}>
-            <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>🎉</span>
+            <span className="empty-icon"><Icon name="check" /></span>
             <div style={{ fontWeight: 600, color: '#374151' }}>Hiện chưa có bài giao nào cho lớp</div>
             <p className="tiny muted" style={{ marginTop: 4 }}>
               Khi giáo viên giao đề thi hoặc bài tập về nhà, bài sẽ xuất hiện ngay tại đây.
@@ -397,7 +322,7 @@ export function StudentClass() {
                       flexShrink: 0,
                     }}
                   >
-                    {isExam ? '📝' : '📖'}
+                    <Icon name={isExam ? "exam" : "book"} />
                   </div>
 
                   <div className="grow" style={{ minWidth: 0 }}>
@@ -420,8 +345,8 @@ export function StudentClass() {
                     </div>
 
                     <div className="row tiny muted" style={{ gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
-                      <span>⏱️ Thời gian: {a.duration_min} phút</span>
-                      <span>📅 Hạn nộp: {fmtDateTime(a.close_at)}</span>
+                      <span><Icon name="clock" /> Thời gian: {a.duration_min} phút</span>
+                      <span><Icon name="clock" /> Hạn nộp: {fmtDateTime(a.close_at)}</span>
                     </div>
                   </div>
 
@@ -443,7 +368,7 @@ export function StudentClass() {
                     ) : a.state === 'doing' ? (
                       <a
                         className="btn sm"
-                        style={{ background: '#fa8c16', color: '#fff', borderColor: '#fa8c16' }}
+                        style={{ background: 'var(--primary)', color: '#fff', borderColor: 'var(--primary)' }}
                         href={`#/thi/${a.attempt_id}`}
                       >
                         Làm tiếp ⏳

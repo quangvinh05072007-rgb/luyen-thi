@@ -44,6 +44,7 @@ export function assessQuestion(q, ctx = {}) {
   const bare = String(q.stem ?? '').replace(/\[\[img:\d+\]\]|\$[^$]*\$|\|/g, '').trim();
   if (bare.length < 12 && !/\[\[img:/.test(q.stem ?? '') && !(q.stem ?? '').includes('$')) add(20, 'Đề bài rất ngắn.');
   if (ctx.kind === 'pdf') add(15, 'Nhập từ PDF: công thức và phân số thường bị mất cấu trúc.');
+  if (ctx.kind === 'pdf-scan') add(25, 'PDF scan: công thức và hình giữ trong ảnh gốc. Cần đối chiếu cách cắt câu, đáp án và chuyên đề trước khi duyệt.');
   if (ctx.kind && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ctx.kind)) add(20, 'Chữ do AI đọc từ ảnh — đối chiếu với ảnh gốc.');
 
   score = Math.min(100, score);

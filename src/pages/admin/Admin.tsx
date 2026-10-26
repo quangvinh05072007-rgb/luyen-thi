@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { get, post, put } from '../../api';
-import { shareUrl, Bar, ErrorBox, fmtDateTime, fmtScore, Loading, Modal, pct, scoreColor, useApp, useAsync } from '../../ui/kit';
+import { PageHeading, shareUrl, Bar, ErrorBox, fmtDateTime, fmtScore, Loading, Modal, pct, scoreColor, useApp, useAsync } from '../../ui/kit';
 
 export function AdminHome() {
   const { meta } = useApp();
@@ -10,8 +10,8 @@ export function AdminHome() {
   const bankBy = (status: string) => data.bank.filter((b: any) => b.status === status).reduce((s: number, b: any) => s + b.n, 0);
   return (
     <div className="stack">
-      <h1>Chất lượng toàn trường</h1>
-      <p className="small muted">Số liệu 90 ngày gần nhất, từ các bài kiểm tra và bài tập giáo viên giao.</p>
+      <PageHeading title="Chất lượng toàn trường" icon="school" description="Số liệu 90 ngày gần nhất, từ các bài kiểm tra và bài tập giáo viên giao." />
+
       <div className="grid-3">
         {data.grades.map((g: any) => (
           <div key={g.grade} className="card stat">
@@ -195,7 +195,7 @@ export function Users() {
   return (
     <div className="stack">
       <div className="row between">
-        <h1>Người dùng và lớp</h1>
+        <PageHeading title="Người dùng và lớp" icon="class" description="Quản lý tài khoản, phân công giáo viên và danh sách lớp học." />
         <div className="row">
           <button className="btn" onClick={() => setClassForm({ name: '', grade: 12, teacherId: '' })}>
             Thêm lớp
@@ -444,7 +444,7 @@ export function Audit() {
   return (
     <div className="stack">
       <div className="row between">
-        <h1>Nhật ký thao tác</h1>
+        <PageHeading title="Nhật ký thao tác" icon="log" description="Theo dõi các thay đổi và hoạt động trong trường." />
         <select className="input" style={{ width: 'auto' }} value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Lọc thao tác">
           <option value="">Mọi thao tác</option>
           {Object.entries(ACTION).map(([k, v]) => (

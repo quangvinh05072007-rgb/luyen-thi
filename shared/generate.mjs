@@ -2,6 +2,12 @@
 import { makeRng, shuffle } from './rng.mjs';
 import { LEVELS, QUESTION_TYPES } from './topics.mjs';
 
+export function imageOptions(q) {
+  if(q?.type!=='mcq'||!/\[\[img:/.test(q.stem??''))return false;
+  if([...String(q.sourceStem??'').matchAll(/\[\[img:\d+\]\]/g)].some(m=>q.stem.includes(m[0])))return true;
+  return q.options?.length===4 && q.options.every((o,i)=>o===`Phương án ${'ABCD'[i]} trong ảnh gốc.`);
+}
+
 export const OFFICIAL_BLUEPRINT = {
   counts: { mcq: 12, tf: 4, short: 6 },
   levels: { 1: 40, 2: 30, 3: 30 },
@@ -75,7 +81,7 @@ export function generateExam(pool, blueprint) {
       if (best) {
         taken.add(best.id);
         topicCount[best.topic]++;
-        items.push({ qid: best.id, type, topic: best.topic, level: best.level });
+        items.push({ qid: best.id, type, topic: best.topic, level: best.level, ...(imageOptions(best) ? {fixedOptions:true} : {}) });
       }
       return best;
     };
@@ -129,7 +135,7 @@ export function makeVariant(items, seed) {
       }
     }
     for (const unit of shuffle(units, rng)) {
-      for (const it of unit) out.push({ qid: it.qid, type, perm: type === 'mcq' ? shuffle([0, 1, 2, 3], rng) : null });
+      for (const it of unit) out.push({ qid: it.qid, type, perm: type === 'mcq' ? (it.fixedOptions ? [0,1,2,3] : shuffle([0, 1, 2, 3], rng)) : null });
     }
   }
   return out;

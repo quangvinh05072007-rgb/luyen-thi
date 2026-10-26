@@ -1,17 +1,18 @@
 import { get } from '../../api';
-import { ErrorBox, fmtScore, Loading, useAsync } from '../../ui/kit';
+import { PageHeading, ErrorBox, fmtScore, Icon, Loading, useAsync } from '../../ui/kit';
 import { Progress } from './Progress';
 import { MyAppeals } from './MyAppeals';
 
 const TABS: [string, string, string][] = [
-  ['results', 'Bảng điểm & Bài làm', '/ket-qua'],
-  ['progress', 'Radar năng lực & Sổ lỗi sai', '/tien-bo'],
+  ['results', 'Điểm & bài đã làm', '/ket-qua'],
+  ['progress', 'Tiến bộ & câu cần ôn', '/tien-bo'],
   ['appeals', 'Khiếu nại', '/khieu-nai'],
 ];
 
 export function StudentResults({ initial = 'results' }: { initial?: string }) {
   return (
     <div className="stack">
+      {initial === 'results' && <PageHeading title="Kết quả học tập" icon="chart" description="Điểm số, bài làm và tiến bộ học tập." />}
       <nav className="section-tabs" aria-label="Kết quả và tiến bộ">
         {TABS.map(([value, label, href]) => (
           <a
@@ -43,7 +44,7 @@ function ResultsList() {
       <div className="stat-widget-grid">
         <div className="stat-widget">
           <div className="stat-widget-icon green">
-            <span style={{ fontSize: 20 }}>✅</span>
+            <Icon name="check" />
           </div>
           <div className="stat-widget-info">
             <span className="stat-widget-num">{rows.length}</span>
@@ -52,7 +53,7 @@ function ResultsList() {
         </div>
         <div className="stat-widget">
           <div className="stat-widget-icon blue">
-            <span style={{ fontSize: 20 }}>📊</span>
+            <Icon name="chart" />
           </div>
           <div className="stat-widget-info">
             <span className="stat-widget-num">{avg}</span>
@@ -61,7 +62,7 @@ function ResultsList() {
         </div>
         <div className="stat-widget">
           <div className="stat-widget-icon orange">
-            <span style={{ fontSize: 20 }}>🏆</span>
+            <Icon name="trophy" />
           </div>
           <div className="stat-widget-info">
             <span className="stat-widget-num">{max}</span>
@@ -73,7 +74,7 @@ function ResultsList() {
       <div className="widget-card">
         <div className="widget-head">
           <h2 className="widget-title">
-            <span>📋</span> Danh sách bài đã làm
+            <Icon name="exam" /> Danh sách bài đã làm
           </h2>
           <span className="badge">{rows.length} bài</span>
         </div>

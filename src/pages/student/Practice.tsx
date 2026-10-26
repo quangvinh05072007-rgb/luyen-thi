@@ -1,6 +1,7 @@
+import { matchesSearch } from '../../../shared/search.mjs';
 import { useState } from 'react';
 import { get, post } from '../../api';
-import { ErrorBox, fmtScore, go, Loading, useApp, useAsync } from '../../ui/kit';
+import { ErrorBox, fmtScore, go, Icon, Loading, useApp, useAsync } from '../../ui/kit';
 
 type PracticeExam = {
   id: number;
@@ -21,12 +22,12 @@ type PracticeResponse = {
 };
 
 const SUBJECT_CONFIG: Record<string, { icon: string; bg: string; color: string; tagBg: string; tagColor: string }> = {
-  'Toán': { icon: '📐', bg: '#e6f4ff', color: '#1677ff', tagBg: '#f0f5ff', tagColor: '#1d39c4' },
-  'Vật lí': { icon: '⚡', bg: '#f9f0ff', color: '#722ed1', tagBg: '#f9f0ff', tagColor: '#531dab' },
-  'Hóa học': { icon: '🧪', bg: '#e6fffb', color: '#13c2c2', tagBg: '#e6fffb', tagColor: '#08979c' },
-  'Tiếng Anh': { icon: '🇬🇧', bg: '#fff0f6', color: '#eb2f96', tagBg: '#fff0f6', tagColor: '#c41d7f' },
-  'Sinh học': { icon: '🧬', bg: '#f6ffed', color: '#52c41a', tagBg: '#f6ffed', tagColor: '#389e0d' },
-  'Lịch sử': { icon: '🏛️', bg: '#fffbe6', color: '#faad14', tagBg: '#fffbe6', tagColor: '#d48806' },
+  'Toán': { icon: 'book', bg: 'var(--primary-soft)', color: 'var(--primary)', tagBg: 'var(--primary-soft)', tagColor: 'var(--primary)' },
+  'Vật lí': { icon: 'book', bg: 'var(--primary-soft)', color: 'var(--primary)', tagBg: 'var(--primary-soft)', tagColor: 'var(--primary)' },
+  'Hóa học': { icon: 'book', bg: 'var(--primary-soft)', color: 'var(--primary)', tagBg: 'var(--primary-soft)', tagColor: 'var(--primary)' },
+  'Tiếng Anh': { icon: 'book', bg: 'var(--primary-soft)', color: 'var(--primary)', tagBg: 'var(--primary-soft)', tagColor: 'var(--primary)' },
+  'Sinh học': { icon: 'book', bg: 'var(--primary-soft)', color: 'var(--primary)', tagBg: 'var(--primary-soft)', tagColor: 'var(--primary)' },
+  'Lịch sử': { icon: 'book', bg: 'var(--primary-soft)', color: 'var(--primary)', tagBg: 'var(--primary-soft)', tagColor: 'var(--primary)' },
 };
 
 export function PracticeHub() {
@@ -48,7 +49,7 @@ export function PracticeHub() {
 
   const filteredExams = exams.filter((e) => {
     const matchSubject = selectedSubject === 'all' || e.subject === selectedSubject;
-    const matchSearch = !search.trim() || e.title.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi'));
+    const matchSearch = !search.trim() || matchesSearch(e.title, search);
     return matchSubject && matchSearch;
   });
 
@@ -69,104 +70,41 @@ export function PracticeHub() {
       const att = await post<any>('/api/practice/start', { mode: 'weak', count: 10 });
       go(`/thi/${att.id}`);
     } catch (err: any) {
-      toast(err.message || 'Chưa đủ dữ liệu để khởi tạo luyện AI.');
+      toast(err.message || 'Chưa đủ dữ liệu để tạo bài luyện điểm yếu.');
       setAiBusy(false);
     }
   };
 
   return (
-    <div className="stack" style={{ gap: 20 }}>
-      {/* Golden Banner Matching User Reference */}
-      <div
-        style={{
-          background: 'linear-gradient(135deg, #fffbe6 0%, #fff1b8 100%)',
-          border: '1px solid #ffe58f',
-          borderRadius: 16,
-          padding: '20px 24px',
-          boxShadow: '0 4px 16px rgba(250, 140, 22, 0.08)',
-        }}
-      >
-        <div className="row between wrap" style={{ gap: 16, alignItems: 'center' }}>
-          <div className="row" style={{ gap: 16, alignItems: 'center' }}>
-            <div
-              style={{
-                width: 54,
-                height: 54,
-                borderRadius: 14,
-                background: '#ff7a45',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 26,
-                flexShrink: 0,
-                boxShadow: '0 4px 12px rgba(255, 122, 69, 0.3)',
-              }}
-            >
-              📖
-            </div>
+    <div className="stack" style={{ gap: 12 }}>
+      <header className="page-intro practice-intro">
+        <div className="row between" style={{ gap: 16 }}>
+          <div className="row" style={{ gap: 16 }}>
+            <span className="page-intro-icon"><Icon name="exam" /></span>
             <div>
-              <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#873800' }}>
-                  Tự Luyện Đề 2026
-                </h1>
-                <span
-                  style={{
-                    background: '#fff7e6',
-                    border: '1px solid #ffd591',
-                    color: '#d46b08',
-                    padding: '3px 10px',
-                    borderRadius: 20,
-                    fontSize: 12,
-                    fontWeight: 700,
-                  }}
-                >
-                  {totalCount} đề thi
-                </span>
-              </div>
-              <div style={{ marginTop: 6, fontSize: 13, color: '#ad4e00', fontWeight: 500 }}>
-                Đã hoàn thành: <strong>{completedCount}/{totalCount} đề</strong> · Chuẩn ma trận 3 Phần (TN Nhiều Lựa Chọn · Đúng/Sai · Điền Số)
-              </div>
+              <div className="row"><h1>Luyện đề</h1><span className="badge blue">{totalCount} đề thi</span></div>
+              <p className="page-intro-description">Đã hoàn thành: <strong>{completedCount}/{totalCount} đề</strong> · Cấu trúc 3 phần.</p>
             </div>
           </div>
-
-          <button
-            type="button"
-            className="btn"
-            style={{
-              background: 'linear-gradient(135deg, #ff7a45 0%, #fa541c 100%)',
-              color: '#fff',
-              border: 'none',
-              fontWeight: 700,
-              padding: '10px 18px',
-              borderRadius: 24,
-              boxShadow: '0 4px 12px rgba(250, 84, 28, 0.3)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-            disabled={aiBusy}
-            onClick={startAdaptiveAI}
-          >
-            {aiBusy ? 'Đang tạo…' : '✨ Luyện thích ứng AI'}
+          <button type="button" className="btn primary" disabled={aiBusy} onClick={startAdaptiveAI}>
+            <Icon name="practice" />{aiBusy ? 'Đang tạo…' : 'Luyện điểm yếu'}
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Filter and Search Bar */}
       <div className="card flat row between wrap" style={{ padding: '12px 18px', gap: 14, alignItems: 'center' }}>
         <div className="filter-pills" style={{ flexWrap: 'wrap', gap: 6 }}>
           {subjects.map((subj) => {
             const isAll = subj === 'all';
-            const label = isAll ? '✨ Tất cả' : `${SUBJECT_CONFIG[subj]?.icon || '📚'} ${subj}`;
+            const label = isAll ? 'Tất cả' : subj;
             const isActive = selectedSubject === subj;
             return (
               <button
                 type="button"
                 key={subj}
                 className={`filter-pill ${isActive ? 'active' : ''}`}
-                style={isActive ? { background: '#ff7a45', borderColor: '#ff7a45', color: '#fff' } : {}}
+
                 onClick={() => setSelectedSubject(subj)}
               >
                 {label}
@@ -181,7 +119,7 @@ export function PracticeHub() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="🔍 Tìm tên đề thi…"
+            aria-label="Tìm tên đề thi" placeholder="Tìm tên đề thi…"
             style={{ borderRadius: 20, padding: '7px 14px' }}
           />
         </div>
@@ -190,7 +128,7 @@ export function PracticeHub() {
       {/* Exam Cards List */}
       {filteredExams.length === 0 ? (
         <div className="card empty" style={{ padding: '40px 20px', textAlign: 'center' }}>
-          <span style={{ fontSize: 36, display: 'block', marginBottom: 8 }}>🔍</span>
+          <span className="empty-icon"><Icon name="search" /></span>
           <div style={{ fontWeight: 600, color: '#374151', fontSize: 16 }}>Không tìm thấy đề thi phù hợp</div>
           <p className="tiny muted" style={{ marginTop: 4 }}>
             Thử chọn môn học khác hoặc xóa bộ lọc tìm kiếm.
@@ -200,7 +138,7 @@ export function PracticeHub() {
         <div className="stack" style={{ gap: 12 }}>
           {filteredExams.map((exam) => {
             const cfg = SUBJECT_CONFIG[exam.subject] || {
-              icon: '📚',
+              icon: 'book',
               bg: '#f0f0f0',
               color: '#595959',
               tagBg: '#fafafa',
@@ -211,13 +149,13 @@ export function PracticeHub() {
             return (
               <div
                 key={exam.id}
-                className="task-widget"
+                className="task-widget practice-exam-row"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 16,
-                  padding: '16px 20px',
-                  borderRadius: 14,
+                  gap: 12,
+                  padding: '12px 14px',
+                  borderRadius: 9,
                   border: '1px solid #e5e7eb',
                   background: '#ffffff',
                   boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
@@ -227,19 +165,19 @@ export function PracticeHub() {
                 {/* Subject Avatar Circle */}
                 <div
                   style={{
-                    width: 50,
-                    height: 50,
-                    borderRadius: '50%',
+                    width: 38,
+                    height: 38,
+                    borderRadius: 12,
                     background: cfg.bg,
                     color: cfg.color,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: 24,
+                    fontSize: 20,
                     flexShrink: 0,
                   }}
                 >
-                  {cfg.icon}
+                  <Icon name={cfg.icon} />
                 </div>
 
                 {/* Exam Info */}
@@ -262,7 +200,7 @@ export function PracticeHub() {
                         className="badge green"
                         style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px' }}
                       >
-                        ✅ Đã nộp: {exam.score10 !== null ? `${fmtScore(exam.score10)}đ` : 'Đã làm'}
+                        <Icon name="check" /> Đã nộp: {exam.score10 !== null ? `${fmtScore(exam.score10)}đ` : 'Đã làm'}
                       </span>
                     )}
                   </div>
@@ -270,7 +208,7 @@ export function PracticeHub() {
                   <h3
                     style={{
                       margin: '0 0 6px',
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: 700,
                       color: '#111827',
                       lineHeight: 1.35,
@@ -280,10 +218,10 @@ export function PracticeHub() {
                   </h3>
 
                   <div className="row tiny muted" style={{ gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span>⏱️ {exam.durationMin} phút</span>
-                    <span>📝 {exam.questionCount} câu</span>
-                    <span>🎯 Chuẩn BGD 3 Phần</span>
-                    {exam.author && <span>👤 Tác giả: {exam.author}</span>}
+                    <span><Icon name="clock" /> {exam.durationMin} phút</span>
+                    <span><Icon name="exam" /> {exam.questionCount} câu</span>
+                    <span><Icon name="book" /> Tự luyện</span>
+                    {exam.author && <span><Icon name="user" /> {exam.author}</span>}
                   </div>
                 </div>
 
@@ -293,7 +231,7 @@ export function PracticeHub() {
                     <a
                       className="btn sm"
                       href={`#/ket-qua/${exam.attemptId}`}
-                      style={{ borderRadius: 20, padding: '6px 14px' }}
+
                     >
                       Xem bài làm
                     </a>
@@ -301,18 +239,7 @@ export function PracticeHub() {
 
                   <button
                     type="button"
-                    className="btn"
-                    style={{
-                      background: 'linear-gradient(135deg, #ff7a45 0%, #fa541c 100%)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: 24,
-                      padding: '8px 20px',
-                      fontWeight: 700,
-                      fontSize: 13,
-                      boxShadow: '0 3px 10px rgba(250, 84, 28, 0.25)',
-                      cursor: 'pointer',
-                    }}
+                    className="btn primary"
                     disabled={isStarting}
                     onClick={() => startExam(exam.id)}
                   >

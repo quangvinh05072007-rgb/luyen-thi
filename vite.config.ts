@@ -3,5 +3,6 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  server: { watch: { ignored: ['**/data/**', '**/tmp-out/**'] } },
   build: { outDir: 'dist', chunkSizeWarningLimit: 1500 },
 });

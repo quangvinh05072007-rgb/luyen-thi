@@ -21,21 +21,35 @@ export async function pdfToText(buf) {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useSystemFonts: true, disableFontFace: true, verbosity: 0 }).promise;
   const lines = [];
-  for (let p = 1; p <= doc.numPages; p++) {
-    const page = await doc.getPage(p);
-    const content = await page.getTextContent();
-    const rows = new Map();
-    for (const it of content.items) {
-      if (!('str' in it)) continue;
-      const y = Math.round(it.transform[5] / 3) * 3;
-      if (!rows.has(y)) rows.set(y, []);
-      rows.get(y).push({ x: it.transform[4], w: it.width ?? 0, h: Math.abs(it.transform[3]) || 10, s: it.str });
+  const scannedPages = [];
+  const pageTexts = [];
+  try {
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p);
+      const content = await page.getTextContent();
+      if (content.items.filter(it => 'str' in it).map(it => it.str).join('').replace(/\s/g, '').length < 20) {
+        const ops = await page.getOperatorList();
+        const imageOps = [pdfjs.OPS.paintImageXObject, pdfjs.OPS.paintInlineImageXObject, pdfjs.OPS.paintImageMaskXObject, pdfjs.OPS.paintImageXObjectRepeat];
+        if (ops.fnArray.some(op => imageOps.includes(op))) scannedPages.push(p);
+      }
+      const rows = new Map();
+      const pageLines = [];
+      for (const it of content.items) {
+        if (!('str' in it)) continue;
+        const y = Math.round(it.transform[5] / 3) * 3;
+        if (!rows.has(y)) rows.set(y, []);
+        rows.get(y).push({ x: it.transform[4], w: it.width ?? 0, h: Math.abs(it.transform[3]) || 10, s: it.str });
+      }
+      [...rows.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .forEach(([, items]) => pageLines.push(joinRow(items.sort((a, b) => a.x - b.x))));
+      lines.push(...pageLines);
+      pageTexts.push(pageLines.join('\n'));
     }
-    [...rows.entries()]
-      .sort((a, b) => b[0] - a[0])
-      .forEach(([, items]) => lines.push(joinRow(items.sort((a, b) => a.x - b.x))));
+    return { text: lines.join('\n'), pages: doc.numPages, scannedPages, pageTexts };
+  } finally {
+    await doc.destroy();
   }
-  return { text: lines.join('\n'), pages: doc.numPages };
 }
 
 /** Gắn chuyên đề/mức độ cho câu chưa có, giữ lại độ tin cậy để giáo viên xem. */
@@ -71,7 +85,7 @@ export function answerEntriesFromText(text) {
 /**
  * Nhập một file. ai: đối tượng AI (có thể null). Trả về { questions, warnings, info }.
  */
-export async function importFile(name, buf, ai) {
+export async function importFile(name, buf, ai, options={}) {
   const ext = (name.match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
   const info = { file: name, kind: ext };
   let parsed;
@@ -87,8 +101,13 @@ export async function importFile(name, buf, ai) {
   } else if (ext === 'doc') {
     throw Object.assign(new Error('File .doc (Word 97–2003) chưa hỗ trợ. Mở bằng Word và lưu thành .docx rồi nhập lại.'), { status: 400 });
   } else if (ext === 'pdf') {
-    const { text, pages } = await pdfToText(buf);
+    const { text, pages, scannedPages, pageTexts } = await pdfToText(buf);
     info.pages = pages;
+    if (scannedPages.length) {
+      const {ocrScannedPdf}=await import('./pdf-ocr.mjs');
+      const result=await ocrScannedPdf(buf,pageTexts,options);
+      return {...result,questions:tagDrafts(result.questions,'pdf-scan'),info:{...info,...result.info}};
+    }
     if (text.replace(/\s/g, '').length < 20) {
       throw Object.assign(new Error('PDF không có lớp chữ (bản scan). Hãy chụp từng trang và nhập dạng ảnh (cần AI), hoặc dùng bản Word.'), { status: 400 });
     }

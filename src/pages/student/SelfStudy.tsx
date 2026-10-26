@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { get, post } from '../../api';
-import { Bar, ErrorBox, go, Loading, useApp, useAsync } from '../../ui/kit';
+import { Bar, ErrorBox, go, Icon, Loading, useApp, useAsync } from '../../ui/kit';
 
 const SUBJECTS = [
-  { id: 'math', name: 'Toán học', icon: '📐', dept: 'Toán' },
-  { id: 'physics', name: 'Vật lí', icon: '⚡', dept: 'Vật lí' },
-  { id: 'chemistry', name: 'Hóa học', icon: '🧪', dept: 'Hóa học' },
-  { id: 'biology', name: 'Sinh học', icon: '🧬', dept: 'Sinh học' },
-  { id: 'english', name: 'Tiếng Anh', icon: '🇬🇧', dept: 'Tiếng Anh' },
-  { id: 'history', name: 'Lịch sử', icon: '🏛️', dept: 'Lịch sử' },
+  { id: 'math', name: 'Toán học', icon: 'math', dept: 'Toán' },
+  { id: 'physics', name: 'Vật lí', icon: 'atom', dept: 'Vật lí' },
+  { id: 'chemistry', name: 'Hóa học', icon: 'flask', dept: 'Hóa học' },
+  { id: 'biology', name: 'Sinh học', icon: 'leaf', dept: 'Sinh học' },
+  { id: 'english', name: 'Tiếng Anh', icon: 'language', dept: 'Tiếng Anh' },
+  { id: 'history', name: 'Lịch sử', icon: 'bank', dept: 'Lịch sử' },
 ];
 
 export function SelfStudy() {
@@ -99,71 +99,24 @@ export function SelfStudy() {
   };
 
   return (
-    <div className="stack" style={{ gap: 20 }}>
-      {/* Header Banner */}
-      <div
-        className="card"
-        style={{
-          background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
-          border: '1px solid #b7eb8f',
-          padding: '20px 24px',
-          borderRadius: 16,
-        }}
-      >
-        <div className="row between wrap" style={{ gap: 16, alignItems: 'center' }}>
-          <div className="row" style={{ gap: 16, alignItems: 'center' }}>
-            <div
-              style={{
-                width: 54,
-                height: 54,
-                borderRadius: 14,
-                background: '#52c41a',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 26,
-                flexShrink: 0,
-                boxShadow: '0 4px 12px rgba(82, 196, 26, 0.25)',
-              }}
-            >
-              🌱
-            </div>
-            <div>
-              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#135200' }}>
-                Tự Học Theo Chuyên Đề
-              </h1>
-              <div style={{ marginTop: 4, fontSize: 13, color: '#237804', fontWeight: 500 }}>
-                Chủ động chọn môn học, khối lớp và củng cố từng chuyên đề kiến thức theo tốc độ riêng của bạn.
-              </div>
-            </div>
+    <div className="stack" style={{ gap: 12 }}>
+      <header className="page-intro">
+        <div className="row between" style={{ gap: 16 }}>
+          <div className="row" style={{ gap: 16 }}>
+            <span className="page-intro-icon"><Icon name="book" /></span>
+            <div><h1>Tự học theo chuyên đề</h1><p className="page-intro-description">Chọn môn, khối và chuyên đề để luyện tập.</p></div>
           </div>
-
-          {picked.length > 0 && (
-            <button
-              type="button"
-              className="btn primary"
-              style={{
-                background: '#389e0d',
-                borderColor: '#389e0d',
-                borderRadius: 20,
-                padding: '8px 20px',
-                fontWeight: 700,
-              }}
-              disabled={busy}
-              onClick={() => startPractice(picked)}
-            >
-              {busy ? 'Đang tạo…' : `Học ${picked.length} chuyên đề đã chọn (${count} câu) →`}
-            </button>
-          )}
+          {picked.length > 0 && <button type="button" className="btn primary" disabled={busy} onClick={() => startPractice(picked)}>
+            {busy ? 'Đang tạo…' : `Học ${picked.length} chuyên đề đã chọn (${count} câu)`}
+          </button>}
         </div>
-      </div>
+      </header>
 
       {/* Selectors Bar: Subject + Grade + Count */}
-      <div className="card flat stack" style={{ padding: '16px 20px', gap: 14 }}>
+      <div className="card flat stack selfstudy-filters" style={{ gap: 10 }}>
         {/* Subject pills */}
         <div className="row between wrap" style={{ gap: 10, alignItems: 'center' }}>
-          <span className="small muted" style={{ fontWeight: 600, minWidth: 70 }}>
+          <span className="small muted" style={{ fontWeight: 600, minWidth: 50 }}>
             Môn học:
           </span>
           <div className="filter-pills" style={{ flexWrap: 'wrap', gap: 6 }}>
@@ -174,13 +127,13 @@ export function SelfStudy() {
                   type="button"
                   key={s.id}
                   className={`filter-pill ${isActive ? 'active' : ''}`}
-                  style={isActive ? { background: '#52c41a', borderColor: '#52c41a', color: '#fff' } : {}}
+
                   onClick={() => {
                     setSelectedSubject(s.id);
                     setPicked([]);
                   }}
                 >
-                  {s.icon} {s.name}
+                  <Icon name={s.icon} /> {s.name}
                 </button>
               );
             })}
@@ -190,7 +143,7 @@ export function SelfStudy() {
         {/* Grade pills & Question count */}
         <div className="row between wrap" style={{ gap: 14, alignItems: 'center', paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
           <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className="small muted" style={{ fontWeight: 600, minWidth: 70 }}>
+            <span className="small muted" style={{ fontWeight: 600, minWidth: 50 }}>
               Khối lớp:
             </span>
             <div className="filter-pills">
@@ -211,7 +164,7 @@ export function SelfStudy() {
           </div>
 
           <div className="row" style={{ gap: 10, alignItems: 'center' }}>
-            <span className="tiny muted">Số câu mỗi lần học:</span>
+            <span className="tiny muted">Số câu:</span>
             <div className="filter-pills">
               {[5, 8, 10, 15].map((n) => (
                 <button
@@ -233,7 +186,7 @@ export function SelfStudy() {
         <div className="row between wrap" style={{ gap: 10, alignItems: 'center' }}>
           <div className="widget-head" style={{ margin: 0 }}>
             <h2 className="widget-title">
-              <span>📚</span> Danh sách chuyên đề ({availableTopics.length})
+              <Icon name="book" /> Danh sách chuyên đề ({availableTopics.length})
             </h2>
             {picked.length > 0 && (
               <span className="badge green" style={{ fontWeight: 700 }}>
@@ -255,7 +208,7 @@ export function SelfStudy() {
             <button
               type="button"
               className="btn sm primary"
-              style={{ background: '#52c41a', borderColor: '#52c41a' }}
+
               disabled={busy || picked.length === 0}
               onClick={() => startPractice(picked)}
             >
@@ -266,7 +219,7 @@ export function SelfStudy() {
 
         {availableTopics.length === 0 ? (
           <div className="card empty" style={{ padding: '36px 20px', textAlign: 'center' }}>
-            <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>📖</span>
+            <span className="empty-icon"><Icon name="book" /></span>
             <div style={{ fontWeight: 600, color: '#374151' }}>
               Chưa có danh sách chuyên đề cho môn và khối này
             </div>
@@ -302,18 +255,18 @@ export function SelfStudy() {
               return (
                 <div
                   key={topic.code}
-                  className="task-widget"
+                  className="task-widget topic-card"
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    padding: 16,
-                    borderRadius: 12,
-                    border: `1.5px solid ${isSelected ? '#52c41a' : '#e5e7eb'}`,
-                    background: isSelected ? '#f6ffed' : '#ffffff',
+                    padding: 12,
+                    borderRadius: 9,
+                    border: `1.5px solid ${isSelected ? 'var(--primary)' : 'var(--line)'}`,
+                    background: isSelected ? 'var(--primary-subtle)' : '#ffffff',
                     cursor: 'pointer',
                     boxShadow: isSelected
-                      ? '0 4px 12px rgba(82, 196, 26, 0.15)'
+                      ? '0 0 0 1px var(--primary)'
                       : '0 2px 6px rgba(0, 0, 0, 0.03)',
                     transition: 'all 0.15s ease',
                   }}
@@ -324,10 +277,11 @@ export function SelfStudy() {
                       <div className="row" style={{ gap: 8, alignItems: 'center' }}>
                         <input
                           type="checkbox"
+                          aria-label={`Chọn chuyên đề ${topic.name}`}
                           checked={isSelected}
                           onChange={() => toggle(topic.code)}
                           onClick={(e) => e.stopPropagation()}
-                          style={{ accentColor: '#52c41a', cursor: 'pointer' }}
+                          style={{ accentColor: 'var(--primary)', cursor: 'pointer' }}
                         />
                         <span
                           style={{
@@ -375,14 +329,14 @@ export function SelfStudy() {
                     </div>
                   </div>
 
-                  <div className="row end" style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid #f0f0f0' }}>
+                  <div className="row end" style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid #f0f0f0' }}>
                     <button
                       type="button"
                       className="btn sm"
                       style={{
-                        background: isSelected ? '#52c41a' : '#f0fdf4',
-                        color: isSelected ? '#fff' : '#166534',
-                        borderColor: '#bbf7d0',
+                        background: isSelected ? 'var(--primary)' : 'var(--primary-soft)',
+                        color: isSelected ? '#fff' : 'var(--primary)',
+                        borderColor: 'var(--line)',
                         fontWeight: 600,
                         padding: '4px 12px',
                         fontSize: 12,

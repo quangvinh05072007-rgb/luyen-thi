@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { get, post } from '../../api';
-import { Bar, ErrorBox, ErrorTypeBadge, fmtDateTime, fmtScore, Loading, pct, scoreColor, useApp, useAsync } from '../../ui/kit';
+import { Icon, Bar, ErrorBox, ErrorTypeBadge, fmtDateTime, fmtScore, Loading, pct, scoreColor, useApp, useAsync } from '../../ui/kit';
 import { AttemptReview, ResultSummary } from '../student/Result';
 import { FamilyAccess } from '../../ui/FamilyAccess';
 import { AttemptActions } from '../../ui/StaffActions';
@@ -53,7 +53,7 @@ export function ClassView({ id, embedded = false }: { id: number; embedded?: boo
           <div className="stack" style={{ gap: 8 }}>
             {data.actions.map((a: any, i: number) => (
               <div key={i} className="task-widget" style={{ padding: '10px 14px' }}>
-                <span style={{ fontSize: 16 }}>📌</span>
+                <Icon name="flag" />
                 <span className="small grow" style={{ fontWeight: 500 }}>{a.text}</span>
               </div>
             ))}
@@ -64,7 +64,7 @@ export function ClassView({ id, embedded = false }: { id: number; embedded?: boo
         <div className="widget-card">
           <div className="widget-head">
             <h2 className="widget-title">
-              <span>⚠️</span> Nhóm học sinh cần hỗ trợ
+              <Icon name="flag" /> Nhóm học sinh cần hỗ trợ
             </h2>
             <span className="badge amber">{weak.data.groups.length} nhóm</span>
           </div>

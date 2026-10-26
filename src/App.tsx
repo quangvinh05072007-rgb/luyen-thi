@@ -30,8 +30,11 @@ type Nav = { path: string; label: string; icon: string };
 const NAV: Record<User['role'], Nav[]> = {
   teacher: [
     { path: '/', label: 'Tổng quan', icon: 'home' },
-    { path: '/lop-hoc', label: 'Lớp học', icon: 'class' },
     { path: '/thu-vien', label: 'Đề & câu hỏi', icon: 'exam' },
+    { path: '/nhap-de', label: 'Nhập đề', icon: 'import' },
+    { path: '/ra-de', label: 'Tạo đề', icon: 'edit' },
+    { path: '/lop-hoc', label: 'Lớp học', icon: 'class' },
+    { path: '/ngan-hang', label: 'Ngân hàng câu hỏi', icon: 'book' },
   ],
   admin: [
     { path: '/', label: 'Toàn trường', icon: 'school' },
@@ -41,9 +44,9 @@ const NAV: Record<User['role'], Nav[]> = {
   student: [
     { path: '/', label: 'Hôm nay', icon: 'home' },
     { path: '/lop-hoc', label: 'Lớp học', icon: 'class' },
-    { path: '/luyen-tap', label: 'Tự luyện đề', icon: 'exam' },
+    { path: '/luyen-tap', label: 'Luyện đề', icon: 'exam' },
     { path: '/tu-hoc', label: 'Tự học', icon: 'book' },
-    { path: '/ket-qua', label: 'Radar năng lực', icon: 'report' },
+    { path: '/ket-qua', label: 'Tiến bộ', icon: 'report' },
   ],
 };
 
@@ -62,6 +65,7 @@ export function App() {
   const { path } = useRoute();
   const [navOpen, setNavOpen] = useState(false);
   useEffect(() => setNavOpen(false), [path]);
+  useEffect(() => { document.getElementById('main-content')?.scrollTo({ top: 0 }); }, [path]);
 
   const refreshUser = useCallback(() => {
     get('/api/me')
@@ -79,7 +83,7 @@ export function App() {
     setTimeout(() => setToast((t) => (t === s ? null : t)), 3500);
   }, []);
 
-  if (path === '/phu-huynh') return <><Family /><InstallApp /></>;
+  if (path === '/phu-huynh') return <div className="public-app"><Family /><InstallApp /></div>;
   if (bootError) return <div className="main"><ErrorBox error={bootError} onRetry={() => location.reload()} /></div>;
   if (!meta || user === undefined || needsSetup === null) return <Loading text="Đang mở SmartExam…" />;
   if (!user && needsSetup) return <Setup onDone={(u) => { setNeedsSetup(false); setUser(u); go('/'); }} />;
@@ -139,38 +143,39 @@ export function App() {
   }
   const nav = NAV[user.role];
   const inExam = path.startsWith('/thi/');
-  const mobileNav = nav.length > 5 ? nav.slice(0, 4) : nav;
-  const moreNav = nav.length > 5 ? [...nav.slice(4), {path:'/tai-khoan',label:'Tài khoản',icon:'user'}] : [];
-  const isActive = (p: string) => p === '/lop-hoc' ? path === p || ['/lop/','/hoc-sinh/','/bai-giao','/bai-lam/','/khieu-nai'].some(prefix=>path.startsWith(prefix)) : p === '/thu-vien' ? ['/thu-vien','/de-thi','/ngan-hang','/nhap-de','/ra-de'].some(prefix=>path.startsWith(prefix)) : p === '/ket-qua' ? ['/ket-qua','/tien-bo','/khieu-nai'].some(prefix=>path.startsWith(prefix)) : p === '/' ? path === '/' : path.startsWith(p);
+  const classScreen = user.role !== 'student' && (path === '/lop-hoc' || path.startsWith('/lop/'));
+  const mobileNav = nav.length > 5 ? nav.filter(n => ['/', '/lop-hoc', '/thu-vien'].includes(n.path)) : nav;
+  const moreNav = nav.length > 5 ? [...nav.filter(n => !mobileNav.includes(n)), {path:'/tai-khoan',label:'Tài khoản',icon:'user'}] : [];
+  const isActive = (p: string) => p === '/lop-hoc' ? path === p || ['/lop/','/hoc-sinh/','/bai-giao','/bai-lam/','/khieu-nai'].some(prefix=>path.startsWith(prefix)) : p === '/thu-vien' ? ['/thu-vien','/de-thi', ...(user.role === 'admin' ? ['/ngan-hang','/nhap-de','/ra-de'] : [])].some(prefix=>path.startsWith(prefix)) : p === '/ket-qua' ? ['/ket-qua','/tien-bo','/khieu-nai'].some(prefix=>path.startsWith(prefix)) : p === '/' ? path === '/' : path.startsWith(p);
+  const roleLabel = {admin:'Quản lý trường',teacher:'Giáo viên',student:'Học sinh'}[user.role];
+  const initials = user.displayName.trim().split(/\s+/).slice(-2).map(part => part[0]).join('');
 
   return (
     <AppCtx.Provider value={{ meta, user, refreshUser, toast }}>
-      <div className="app">
+      <div className={`app ${inExam ? 'exam-app' : 'workspace-app'}`}>
         <a href="#main-content" className="skip-link" onClick={e => {e.preventDefault();document.getElementById('main-content')?.focus();}}>Đến nội dung chính</a>
         {!inExam && (
           <aside className="sidebar">
-            <a className="brand" href="#/">
-              <AzotaLogo size={34} />
-              <div className="brand-text">
-                <span className="brand-name">SmartExam</span>
-                <span className="brand-tag">azota style</span>
-              </div>
+            <a className="brand workspace-brand" href="#/" aria-label="SmartExam — Trang chủ" title="SmartExam">
+              <AzotaLogo size={44} />
             </a>
             {nav.map((n) => (
-              <a key={n.path} href={`#${n.path}`} aria-current={isActive(n.path) ? 'page' : undefined} className={`nav ${isActive(n.path) ? 'active' : ''}`}>
-                <Icon name={n.icon} /> {n.label}
+              <a key={n.path} href={`#${n.path}`} aria-label={n.label} aria-current={isActive(n.path) ? 'page' : undefined} className={`nav ${isActive(n.path) ? 'active' : ''}`}>
+                <Icon name={n.icon} /><span className="rail-label">{n.label}</span>
               </a>
             ))}
             <div className="spacer" />
-            <div className="who">
-              <div className="strong" style={{ color: 'var(--ink)' }}>{user.displayName}</div>
-              <div>{user.school.name}</div>
-            </div>
+            <a href="#/tai-khoan" aria-label="Tài khoản và cài đặt" className={`nav rail-settings ${path === '/tai-khoan' ? 'active' : ''}`} aria-current={path === '/tai-khoan' ? 'page' : undefined}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m9 3-1 3-3 1-2 3 2 2-1 3 2 3 3-1 2 3h3l1-3 3-1 2-3-2-2 1-3-2-3-3 1-2-3Z" /><circle cx="11.5" cy="11.5" r="3" /></svg>
+              <span className="rail-label">Tài khoản & cài đặt</span>
+            </a>
           </aside>
         )}
-        <main className="main" id="main-content" tabIndex={-1}>
+        <main className={`main${inExam ? '' : ' workspace-main'}${classScreen ? ' class-management-main' : ''}`} id="main-content" tabIndex={-1}>
           {!inExam && (
-            <div className="topbar">
+            <div className="topbar workspace-topbar">
+              {classScreen && <a className="workspace-back" href={path === '/lop-hoc' ? '#/' : '#/lop-hoc'}><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m12 5-5 5 5 5" /></svg>Quay lại</a>}
+              {classScreen && path !== '/lop-hoc' && <span className="workspace-class-context">{path.includes('/ket-qua') ? 'Bảng điểm và báo cáo' : path.includes('/bai-giao') ? 'Bài tập, đề thi' : path.includes('/cai-dat') ? 'Cài đặt lớp' : 'Danh sách học sinh'}</span>}
               <a className="brand" href="#/">
                 <AzotaLogo size={32} />
                 <div className="brand-text">
@@ -178,11 +183,16 @@ export function App() {
                 </div>
               </a>
               <div className="grow" />
-              <span className="workspace-label small muted">{{admin:'Quản lý trường',teacher:'Không gian giáo viên',student:'Không gian học tập'}[user.role]}</span>
-              <details className="account-menu" onKeyDown={e=>{if(e.key==='Escape')e.currentTarget.open=false;}}><summary><Icon name="user"/><span>{user.displayName}</span></summary><div className="account-options" onClick={e=>{(e.currentTarget.parentElement as HTMLDetailsElement).open=false;}}><a href="#/tai-khoan">Tài khoản</a>{user.role==='admin'&&<><a href="#/nguoi-dung">Người dùng & phân công</a><a href="#/nhat-ky">Nhật ký</a><a href="#/bao-cao">Báo cáo toàn trường</a></>}<button onClick={logout}>Đăng xuất</button></div></details>
+              {user.role !== 'student' && <div className="workspace-top-actions"><a href="#/ra-de" className="workspace-top-action"><Icon name="plus" />Tạo đề mới</a><a href="#/nhap-de" className="workspace-top-action secondary"><Icon name="upload" />Nhập đề</a></div>}
+              <svg className="workspace-locale" viewBox="0 0 30 20" role="img" aria-label="Tiếng Việt"><path fill="#da251d" d="M0 0h30v20H0z"/><path fill="#ff0" d="m15 3 1.6 4.9h5.2l-4.2 3 1.6 4.9-4.2-3-4.2 3 1.6-4.9-4.2-3h5.2Z"/></svg>
+              <details className="account-menu" onKeyDown={e=>{if(e.key==='Escape')e.currentTarget.open=false;}}>
+                <summary><span className="workspace-avatar" aria-hidden="true">{initials}</span><span className="workspace-account-name"><strong>{user.displayName}</strong><small>{roleLabel}</small></span></summary>
+                <div className="account-options" onClick={e=>{(e.currentTarget.parentElement as HTMLDetailsElement).open=false;}}><a href="#/tai-khoan">Tài khoản</a>{user.role==='admin'&&<><a href="#/nguoi-dung">Người dùng & phân công</a><a href="#/nhat-ky">Nhật ký</a><a href="#/bao-cao">Báo cáo toàn trường</a></>}<button onClick={logout}>Đăng xuất</button></div>
+              </details>
             </div>
           )}
-          {user.school.sample ? (
+          <div className={inExam ? undefined : 'workspace-content'}>
+          {user.school.sample && !classScreen && !(path === '/' && user.role === 'teacher') ? (
             <div className="sample-banner">
               <span style={{ fontSize: 16 }}>💡</span>
               <span>Đang trải nghiệm <b>trường học mẫu</b>: tài khoản, câu hỏi và đề thi được khởi tạo sẵn để thử nghiệm đầy đủ các tính năng.</span>
@@ -194,6 +204,7 @@ export function App() {
               <a className="btn" href="#/">Về trang chính</a>
             </div>
           )}
+          </div>
         </main>
         {!inExam && (
           <nav className="tabbar">

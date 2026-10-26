@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { get, post } from '../../api';
-import { Bar, ErrorBox, go, Loading, pct, useApp, useAsync } from '../../ui/kit';
+import { Bar, ErrorBox, go, Icon, PageHeading, Loading, pct, useApp, useAsync } from '../../ui/kit';
 import { ProfileView } from '../teacher/ClassView';
 
 const BAND: Record<string, string> = { weak: 'Cần củng cố', ok: 'Khá', strong: 'Vững' };
@@ -15,7 +15,7 @@ function ProgressNumbers({ p }: { p: any }) {
       <div className="stat-widget-grid">
         <div className="stat-widget">
           <div className="stat-widget-icon orange">
-            <span style={{ fontSize: 20 }}>🔥</span>
+            <Icon name="flame" />
           </div>
           <div className="stat-widget-info">
             <span className="stat-widget-num">{p.streak.current}</span>
@@ -26,7 +26,7 @@ function ProgressNumbers({ p }: { p: any }) {
         </div>
         <div className="stat-widget">
           <div className="stat-widget-icon red" style={{ background: '#fff1f0', color: '#ff4d4f' }}>
-            <span style={{ fontSize: 20 }}>📑</span>
+            <Icon name="exam" />
           </div>
           <div className="stat-widget-info">
             <span className="stat-widget-num">{p.reviewDue}</span>
@@ -35,7 +35,7 @@ function ProgressNumbers({ p }: { p: any }) {
         </div>
         <div className="stat-widget">
           <div className="stat-widget-icon blue">
-            <span style={{ fontSize: 20 }}>🎯</span>
+            <Icon name="target" />
           </div>
           <div className="stat-widget-info">
             <span className="stat-widget-num">
@@ -51,7 +51,7 @@ function ProgressNumbers({ p }: { p: any }) {
         <div className="widget-card">
           <div className="widget-head">
             <h2 className="widget-title">
-              <span>📊</span> Năng lực theo chuyên đề
+              <Icon name="chart" /> Năng lực theo chuyên đề
             </h2>
           </div>
           {p.topics.length === 0 && <p className="muted small">Chưa có dữ liệu.</p>}
@@ -70,7 +70,7 @@ function ProgressNumbers({ p }: { p: any }) {
         <div className="widget-card">
           <div className="widget-head">
             <h2 className="widget-title">
-              <span>📈</span> Xu hướng học tập 4 tuần
+              <Icon name="report" /> Xu hướng học tập 4 tuần
             </h2>
           </div>
           {p.trend.weeks.map((w: any) => (
@@ -129,27 +129,22 @@ export function Progress() {
   const totalReview = profile.data.review?.total || 0;
 
   return (
-    <div className="stack" style={{ gap: 20 }}>
+    <div className="stack" style={{ gap: 12 }}>
       <div className="row between wrap" style={{ gap: 12, alignItems: 'center' }}>
-        <div>
-          <h1 style={{ margin: 0 }}>Radar năng lực & Sổ lỗi sai</h1>
-          <p className="tiny muted" style={{ marginTop: 4 }}>
-            Theo dõi năng lực từng chuyên đề, các lỗi sai hay gặp và ôn tập ngắt quãng thông minh.
-          </p>
-        </div>
+        <PageHeading title="Tiến bộ & câu cần ôn" description="Theo dõi năng lực và ôn lại câu sai." icon="chart" />
       </div>
 
-      {/* Action Widgets: Sổ lỗi sai + Khắc phục chuyên đề yếu */}
+      {/* Action Widgets: Câu cần ôn + Khắc phục chuyên đề yếu */}
       <div className="grid-2">
-        <div className="widget-card" style={{ display: 'flex', flexDirection: 'column', gap: 12, border: '1px solid #ffd591', background: '#fffbe6' }}>
+        <div className="widget-card" style={{ display: 'flex', flexDirection: 'column', gap: 12, border: '1px solid var(--line)', background: '#fff' }}>
           <div className="row between" style={{ alignItems: 'flex-start' }}>
             <div>
-              <span className="badge" style={{ marginBottom: 4, background: '#fff1f0', color: '#cf1322', fontWeight: 700 }}>
-                Lặp lại ngắt quãng (Spaced Repetition)
+              <span className="badge" style={{ marginBottom: 4, background: 'var(--primary-soft)', color: 'var(--primary)', fontWeight: 700 }}>
+                Ôn tập theo lịch
               </span>
-              <h2 style={{ margin: '4px 0 0', fontSize: 17, color: '#873800' }}>Sổ lỗi sai</h2>
+              <h2 style={{ margin: '4px 0 0', fontSize: 17, color: 'var(--ink)' }}>Câu cần ôn</h2>
             </div>
-            <span style={{ fontSize: 28 }}>🔁</span>
+            <span className="page-intro-icon"><Icon name="clock" /></span>
           </div>
           <div className="row tiny muted">
             <span>{dueCount} câu cần ôn tập hôm nay · {totalReview} câu đã lưu trong sổ</span>
@@ -159,9 +154,9 @@ export function Progress() {
             className="btn block"
             style={{
               marginTop: 'auto',
-              background: dueCount > 0 ? '#fa8c16' : '#d9d9d9',
+              background: dueCount > 0 ? 'var(--primary)' : 'var(--surface-3)',
               color: dueCount > 0 ? '#fff' : '#595959',
-              borderColor: dueCount > 0 ? '#fa8c16' : '#d9d9d9',
+              borderColor: dueCount > 0 ? 'var(--primary)' : 'var(--line)',
               fontWeight: 700,
             }}
             disabled={busy || dueCount === 0}
@@ -171,18 +166,18 @@ export function Progress() {
           </button>
         </div>
 
-        <div className="widget-card" style={{ display: 'flex', flexDirection: 'column', gap: 12, border: '1px solid #bae0ff', background: '#f0f7ff' }}>
+        <div className="widget-card" style={{ display: 'flex', flexDirection: 'column', gap: 12, border: '1px solid var(--line)', background: '#fff' }}>
           <div className="row between" style={{ alignItems: 'flex-start' }}>
             <div>
               <span className="badge blue" style={{ marginBottom: 4, fontWeight: 700 }}>
-                Đề xuất củng cố AI
+                Luyện theo kết quả
               </span>
-              <h2 style={{ margin: '4px 0 0', fontSize: 17, color: '#002c8c' }}>Khắc phục phần còn yếu</h2>
+              <h2 style={{ margin: '4px 0 0', fontSize: 17, color: 'var(--ink)' }}>Khắc phục phần còn yếu</h2>
             </div>
-            <span style={{ fontSize: 28 }}>🎯</span>
+            <span className="page-intro-icon"><Icon name="practice" /></span>
           </div>
           <div className="row tiny muted">
-            <span>AI tự động phát hiện chuyên đề bạn hay sai để sinh bài luyện 8 câu củng cố</span>
+            <span>Chọn 8 câu từ chuyên đề bạn còn yếu để luyện lại.</span>
           </div>
           <button
             type="button"

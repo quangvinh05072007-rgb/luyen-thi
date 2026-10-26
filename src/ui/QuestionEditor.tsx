@@ -1,13 +1,17 @@
 // Sửa một câu hỏi (dùng ở Ngân hàng và Nhập đề). Có xem trước công thức.
-import { useId } from 'react';
+import { lazy, Suspense, useId, useState } from 'react';
 import { MathText } from './MathText';
 import { useApp } from './kit';
+const RichField=lazy(()=>import('./RichField'));
+const MathOcrReview=lazy(()=>import('./MathOcrReview'));
 
-export type Draft = { type: 'mcq' | 'tf' | 'short'; stem: string; options: string[]; answer: any; explanation: string; topic: string | null; level: number; distractors?: any; group_id?: string | null };
+export type Draft = { type: 'mcq' | 'tf' | 'short'; stem: string; options: string[]; answer: any; explanation: string; topic: string | null; level: number; distractors?: any; group_id?: string | null; ocrText?: string; sourceStem?: string };
 
 export function QuestionEditor({ q, onChange }: { q: Draft; onChange: (q: Draft) => void }) {
   const { meta } = useApp();
   const uid = useId();
+  const [mathOcr,setMathOcr]=useState(false);
+  const original=q.sourceStem || (q.ocrText&&q.stem.includes('[[img:')?q.stem:'');
   const set = (patch: Partial<Draft>) => onChange({ ...q, ...patch });
   const setType = (type: Draft['type']) => {
     if (type === q.type) return;
@@ -23,7 +27,9 @@ export function QuestionEditor({ q, onChange }: { q: Draft; onChange: (q: Draft)
     set({ distractors: d });
   };
   return (
-    <div className="stack">
+    <div className={`question-editor ${original?'has-source':''}`}>
+      {original&&<aside className="question-source"><h3>Ảnh gốc đối chiếu</h3><MathText as="div" text={original}/><p className="tiny muted">Giữ nguyên hình và công thức gốc để kiểm tra nội dung sau khi sửa.</p>{q.stem===original&&q.ocrText&&<button className="btn sm" type="button" onClick={()=>set({sourceStem:original,stem:q.ocrText??''})}>Soạn lại từ chữ OCR</button>}{meta.mathOcrAvailable&&<button className="btn sm mt" type="button" onClick={()=>setMathOcr(true)}>Nhận dạng công thức · thử nghiệm</button>}<p className="tiny muted">Chữ OCR có thể sai ký hiệu Toán. Hãy kiểm tra từng công thức.</p></aside>}
+    <div className="stack question-edit-content">
       <div className="row">
         <div className="seg">
           {(['mcq', 'tf', 'short'] as const).map((t) => (
@@ -56,10 +62,10 @@ export function QuestionEditor({ q, onChange }: { q: Draft; onChange: (q: Draft)
       </div>
       <label className="field">Nhóm câu dùng chung dữ kiện (nếu có)<input className="input" maxLength={40} value={q.group_id ?? ''} onChange={e => set({group_id:e.target.value || null})} placeholder="Các câu cùng nhóm sẽ nằm liền nhau khi đảo đề" /></label>
       <div className="field">
-        <label>Đề bài (công thức viết trong $…$, ví dụ $\frac{'{1}{2}'}$)</label>
-        <textarea className="input" value={q.stem} onChange={(e) => set({ stem: e.target.value })} />
-        {q.stem.includes('$') && <MathText as="div" className="explain q-stem" text={q.stem} />}
+        <label>Đề bài</label>
+        <Suspense fallback={<span className="tiny muted">Đang mở trình soạn…</span>}><RichField label="Đề bài" value={q.stem} onChange={stem=>set({stem,...(original?{sourceStem:original}:{})})}/></Suspense>
       </div>
+      {(q.ocrText || /^\s*(\[\[img:\d+\]\]\s*)+$/.test(q.stem)) && <label className="field">Chữ OCR tham khảo (có thể sai ký hiệu Toán; ảnh gốc ở trên được giữ nguyên)<textarea className="input" value={q.ocrText ?? ''} onChange={e=>set({ocrText:e.target.value})} /></label>}
       {q.type === 'mcq' &&
         opts.map((o, i) => (
           <div key={i} className="row" style={{ alignItems: 'flex-start' }}>
@@ -68,8 +74,7 @@ export function QuestionEditor({ q, onChange }: { q: Draft; onChange: (q: Draft)
               <b>{'ABCD'[i]}</b>
             </label>
             <div style={{ flex: 1, minWidth: 180 }}>
-              <input className="input" value={o} onChange={(e) => setOpt(i, e.target.value)} aria-label={`Phương án ${'ABCD'[i]}`} />
-              {o.includes('$') && <MathText className="tiny" text={o} />}
+              <Suspense fallback={<span className="tiny muted">Đang mở trình soạn…</span>}><RichField compact label={`Phương án ${'ABCD'[i]}`} value={o} onChange={v=>setOpt(i,v)}/></Suspense>
             </div>
             {q.answer !== i && (
               <select className="input" style={{ width: 'auto' }} value={errFor(i)} onChange={(e) => setErr(i, e.target.value)} aria-label="Kiểu lỗi nếu chọn phương án này" title="Học sinh chọn phương án này thường mắc lỗi gì?">
@@ -87,7 +92,7 @@ export function QuestionEditor({ q, onChange }: { q: Draft; onChange: (q: Draft)
         opts.map((o, i) => (
           <div key={i} className="row">
             <b>{'abcd'[i]})</b>
-            <input className="input" style={{ flex: 1, minWidth: 180 }} value={o} onChange={(e) => setOpt(i, e.target.value)} aria-label={`Ý ${'abcd'[i]}`} />
+            <div className="grow"><Suspense fallback={<span className="tiny muted">Đang mở trình soạn…</span>}><RichField compact label={`Ý ${'abcd'[i]}`} value={o} onChange={v=>setOpt(i,v)}/></Suspense></div>
             <div className="tf-btns">
               {[true, false].map((v) => (
                 <button key={String(v)} type="button" className={Array.isArray(q.answer) && q.answer[i] === v ? (v ? 'on-t' : 'on-f') : ''} onClick={() => set({ answer: [0, 1, 2, 3].map((k) => (k === i ? v : Array.isArray(q.answer) ? q.answer[k] : null)) })}>
@@ -101,14 +106,14 @@ export function QuestionEditor({ q, onChange }: { q: Draft; onChange: (q: Draft)
         <div className="field">
           <label>Đáp án (nhiều đáp án được chấp nhận thì ngăn bằng dấu ;)</label>
           <input className="input" style={{ maxWidth: 240 }} value={q.answer ?? ''} onChange={(e) => set({ answer: e.target.value })} />
-          {String(q.answer ?? '').split(';')[0].trim().length > 4 && <span className="tiny" style={{ color: 'var(--warn)' }}>Đề thi 2025 yêu cầu đáp số tối đa 4 ký tự.</span>}
         </div>
       )}
       <div className="field">
         <label>Lời giải</label>
-        <textarea className="input" value={q.explanation} onChange={(e) => set({ explanation: e.target.value })} />
-        {q.explanation.includes('$') && <MathText as="div" className="explain" text={q.explanation} />}
+        <Suspense fallback={<span className="tiny muted">Đang mở trình soạn…</span>}><RichField label="Lời giải" value={q.explanation} onChange={explanation=>set({explanation})}/></Suspense>
       </div>
+    </div>
+    {mathOcr&&<Suspense fallback={<p className="tiny muted">Đang mở nhận dạng…</p>}><MathOcrReview type={q.type} sourceStem={original} onClose={()=>setMathOcr(false)} onApply={candidate=>set({sourceStem:original,stem:candidate.stem,options:candidate.options,answer:q.type==='tf'?[null,null,null,null]:null})}/></Suspense>}
     </div>
   );
 }

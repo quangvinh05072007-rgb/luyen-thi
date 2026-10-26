@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { download, get, post, put } from '../../api';
 import { MathText } from '../../ui/MathText';
-import { ErrorBox, LevelBadge, Loading, Modal, SourceBadge, topicName, TypeBadge, useApp, useAsync, useRoute } from '../../ui/kit';
+import { PageHeading, ErrorBox, LevelBadge, Loading, Modal, SourceBadge, topicName, TypeBadge, useApp, useAsync, useRoute } from '../../ui/kit';
 import { Draft, QuestionEditor } from '../../ui/QuestionEditor';
 import { Comments } from '../../ui/Comments';
 import { QuestionHistory } from '../../ui/QuestionHistory';
@@ -186,12 +186,9 @@ export function Bank() {
   return (
     <div className="stack">
       <div className="row between">
-        <div>
-          <h1>Ngân hàng câu hỏi</h1>
-          <div className="small muted">
+        <PageHeading title="Ngân hàng câu hỏi" icon="bank" description={<>
             {data?.counts?.approved ?? 0} câu đã duyệt · {data?.counts?.draft ?? 0} câu nháp
-          </div>
-        </div>
+          </>} />
         <div className="row">
           <button className="btn" onClick={create}>
             Thêm câu
@@ -203,8 +200,8 @@ export function Bank() {
       </div>
       {data?.reviewPolicy === 'double' && <div className="alert info small">Trường đang duyệt hai người: câu nháp cần hai người khác nhau xác nhận. Sửa nội dung sẽ bắt đầu lại lượt duyệt.</div>}
       <div className="card flat">
-        <div className="row">
-          <input className="input" style={{ flex: 2, minWidth: 180 }} placeholder="Tìm trong đề bài…" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
+        <div className="bank-filters">
+          <input className="input" style={{ flex: 2, minWidth: 180 }} aria-label="Tìm trong đề bài" placeholder="Tìm trong đề bài…" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
           <select className="input" style={{ flex: 1, minWidth: 130 }} value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} aria-label="Trạng thái">
             <option value="all">Mọi trạng thái</option>
             <option value="draft">Nháp (chờ duyệt)</option>

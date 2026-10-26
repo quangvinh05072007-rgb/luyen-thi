@@ -1,0 +1,76 @@
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const {chromium}=require('C:/Users/LEGION/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const file=path.join(__dirname,'Kho nhan vat 2 - Rig nu v2.html');
+(async()=>{
+ const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});
+ try{
+  const page=await browser.newPage({viewport:{width:1480,height:1000}}),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('file:///'+file.replaceAll('\\','/'));
+  assert.equal(await page.locator('#mid #poseSelect').count(),1,'Phần xem cần một danh sách động tác');
+  assert.equal(await page.locator('#mid [data-pose]').count(),0,'Bỏ bảng nút động tác khỏi phần xem');
+  assert.equal(await page.locator('#mid #mood,#mid #qbar,#mid #rigp,#mid .hd2').count(),0,'Công cụ chỉnh sửa phải nằm ngoài phần xem');
+  assert.equal(await page.locator('#mid .preview-controls').count(),1);
+  assert.equal(await page.locator('#mid .preview-controls button').count(),5,'Ba góc, chọn động tác và một nút phát');
+  assert.equal(await page.locator('#edit #qbar').count(),1,'Giữ mô tả trong bảng chỉnh sửa');
+  assert.equal(await page.locator('#previewTools').getAttribute('open'),null);
+  await page.locator('#poseSelect').selectOption('walk');
+  assert.equal(await page.evaluate(()=>window.CharacterStudioV2.config().pose),'walk');
+  await page.locator('#playTg').click();
+  const paused=await page.locator('#stage .fig').innerHTML();
+  await page.waitForTimeout(150);
+  assert.equal(await page.locator('#stage .fig').innerHTML(),paused);
+  await page.locator('#previewTools summary').click();
+  await page.locator('[data-cam="face"]').click();
+  await page.waitForTimeout(400);
+  assert.equal(await page.locator('[data-cam="face"]').getAttribute('aria-pressed'),'true');
+  await page.locator('[data-cam="full"]').click();
+  await page.locator('[data-preview-view="right"]').click();
+  assert.equal(await page.locator('.preview-controls [data-view="side"]').getAttribute('aria-pressed'),'true');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#previewTools').getAttribute('open'),null);
+  await page.locator('[data-view="front"]').click();
+  await page.locator('[data-tab="3"]').click();
+  await page.locator('[data-rig="tg"]').click();
+  assert.equal(await page.locator('#edit [data-rig-field]').count(),27);
+  await page.locator('#poseSelect').selectOption('wave');
+  assert.equal(await page.locator('#edit [data-rig-field]').count(),0,'Chọn động tác phải thoát chỉnh khớp');
+  await page.locator('[data-tab="0"]').click();
+  await page.locator('[data-sec="expr"]').click();
+  assert.equal(await page.locator('#edit #mood').count(),1);
+  await page.locator('#mood').fill('40');
+  await page.locator('#mood').dispatchEvent('change');
+  assert.equal(await page.evaluate(()=>window.CharacterStudioV2.config().mood),.4);
+  await page.locator('.description-panel summary').click();
+  await page.locator('#qk').fill('tóc bob');
+  await page.locator('#qAdd').click();
+  assert.equal(await page.evaluate(()=>window.CharacterStudioV2.config().hairStyle),'bob');
+  for(const size of [{width:375,height:812},{width:390,height:844},{width:844,height:390}]){
+   await page.setViewportSize(size);
+   await page.locator('#nav [data-v="prev"]').click();
+   await page.waitForTimeout(150);
+   const boxes=await page.evaluate(()=>{
+    const b=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height,bottom:r.bottom,right:r.right};};
+    return {mid:b(document.querySelector('#mid')),controls:b(document.querySelector('.preview-controls')),stage:b(document.querySelector('#stage')),nav:b(document.querySelector('#nav')),width:innerWidth,scroll:document.documentElement.scrollWidth};
+   });
+   assert.ok(boxes.controls.bottom<=boxes.nav.y+1,'Điều khiển phải hiện trên điện thoại');
+   assert.ok(boxes.controls.right<=boxes.width,'Điều khiển không tràn ngang');
+   assert.ok(boxes.scroll<=boxes.width,'Trang không tràn ngang');
+   assert.ok(boxes.stage.h>120,'Giữ diện tích cho nhân vật');
+   await page.locator('#previewTools summary').click();
+   await page.waitForTimeout(60);
+   const menu=await page.locator('.preview-tools-panel').boundingBox();
+   assert.ok(menu.y+menu.height<=boxes.stage.bottom,'Menu phụ không bị cắt khi màn hình thấp');
+   await page.keyboard.press('Escape');
+   if(size.width===390)await page.screenshot({path:path.join(__dirname,'preview-mobile.png')});
+  }
+  await page.setViewportSize({width:1480,height:1000});
+  await page.locator('[data-tab="0"]').click();
+  await page.evaluate(()=>window.CharacterStudioV2.set({pose:'stand',mood:0,hairStyle:'long'}));
+  await page.waitForTimeout(400);
+  await page.screenshot({path:path.join(__dirname,'preview-desktop.png')});
+  assert.deepEqual(errors,[]);
+  console.log('PASS: compact preview, camera menu, motion, moved editor tools, mobile and landscape');
+ }finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

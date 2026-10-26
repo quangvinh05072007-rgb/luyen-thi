@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { download, get, post } from '../../api';
 import { MathText } from '../../ui/MathText';
 import { AssignmentExtension, AttemptActions } from '../../ui/StaffActions';
-import { Bar, ErrorBox, ErrorTypeBadge, fmtDateTime, fmtScore, Loading, pct, scoreColor, topicName, useApp, useAsync } from '../../ui/kit';
+import { Icon, Bar, ErrorBox, ErrorTypeBadge, fmtDateTime, fmtScore, Loading, pct, scoreColor, topicName, useApp, useAsync } from '../../ui/kit';
 
 export function Assignments({ classId, results = true }: { classId?: number; results?: boolean }) {
   const { data, error, loading, reload } = useAsync(() => get(`/api/assignments${classId ? `?classId=${classId}` : ''}`), [classId]);
@@ -100,7 +100,7 @@ export function Report({ id, classId }: { id: number; classId?: number }) {
       <div className="stat-widget-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <div className="stat-widget">
           <div className="stat-widget-icon blue">
-            <span style={{ fontSize: 20 }}>📊</span>
+            <Icon name="chart" />
           </div>
           <div className="stat-widget-info">
             <span className="stat-widget-num" style={{ color: scoreColor(s.avg) }}>{fmtScore(s.avg)}</span>
@@ -109,7 +109,7 @@ export function Report({ id, classId }: { id: number; classId?: number }) {
         </div>
         <div className="stat-widget">
           <div className="stat-widget-icon green">
-            <span style={{ fontSize: 20 }}>📝</span>
+            <Icon name="exam" />
           </div>
           <div className="stat-widget-info">
             <span className="stat-widget-num">{s.submitted}/{s.students}</span>

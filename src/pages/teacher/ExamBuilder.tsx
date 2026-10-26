@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, get, post } from '../../api';
 import { MathText } from '../../ui/MathText';
-import { ErrorBox, go, LevelBadge, Modal, SourceBadge, topicName, useApp, useAsync, useRoute } from '../../ui/kit';
+import { PageHeading, ErrorBox, go, Icon, LevelBadge, Modal, SourceBadge, topicName, useApp, useAsync, useRoute } from '../../ui/kit';
 
 const PRESETS = {
   official: { label: 'Đề tốt nghiệp chuẩn', counts: { mcq: 12, tf: 4, short: 6 }, levels: { 1: 40, 2: 30, 3: 30 }, durationMin: 90 },
@@ -79,12 +79,9 @@ export function ExamBuilder() {
   const lvTotal = Object.values(bp.levels).reduce((a, b) => a + Number(b), 0);
 
   return (
-    <div className="stack">
-      <div>
-        <h1>Ra đề</h1>
-        <p className="small muted">Chọn cấu trúc, máy lấy câu đã duyệt theo ma trận chuyên đề × mức độ, tránh câu vừa dùng. Bạn xem, đổi từng câu, rồi lưu.</p>
-      </div>
-      <div className="card stack">
+    <div className="stack exam-builder-page">
+      <header className="builder-hero"><PageHeading title="Tạo đề ma trận" icon="matrix" description="Chọn mẫu, chỉnh cấu trúc rồi sinh đề." /></header>
+      <div className="card stack builder-config"><div className="builder-section-heading"><span><Icon name="gear" />Cấu trúc đề</span></div>
         <details className="template-panel"><summary className="strong">Mẫu ma trận của trường</summary><div className="stack mt">
           {templates.error && <ErrorBox error={templates.error} onRetry={templates.reload} />}
           {templates.data?.blueprints.length === 0 && <p className="small muted">Lưu cấu trúc bên dưới thành mẫu để ra đề nhanh lần sau.</p>}
@@ -92,29 +89,30 @@ export function ExamBuilder() {
           <label className="field">Tên mẫu mới<input className="input" value={templateName} maxLength={100} onChange={e => setTemplateName(e.target.value)} placeholder="Ví dụ: Giữa kỳ 12 — 45 phút" /></label>
           <label className="check"><input type="checkbox" checked={templateShared} onChange={e => setTemplateShared(e.target.checked)} />Cho giáo viên trong trường dùng mẫu</label><div><button className="btn" disabled={busy || !templateName.trim()} onClick={saveTemplate}>Lưu cấu trúc hiện tại thành mẫu</button></div>
         </div></details>
-        <div className="seg">
+        <div className="builder-presets" role="group" aria-label="Mẫu cấu trúc đề">
           {(Object.keys(PRESETS) as (keyof typeof PRESETS)[]).map((k) => (
-            <button key={k} className={preset === k ? 'on' : ''} onClick={() => applyPreset(k)}>
-              {PRESETS[k].label}
+            <button type="button" key={k} className={preset === k ? 'on' : ''} aria-pressed={preset === k} onClick={() => applyPreset(k)}>
+              <span className="builder-preset-icon"><Icon name={k === 'official' ? 'exam' : k === 'test45' ? 'clock' : 'practice'} /></span><span className="builder-preset-label">{PRESETS[k].label}<small>{PRESETS[k].durationMin} phút · {Object.values(PRESETS[k].counts).reduce((sum, n) => sum + n, 0)} câu</small></span><span className="builder-preset-check">{preset === k && <Icon name="check" />}</span>
             </button>
           ))}
-          <button className={preset === 'custom' ? 'on' : ''} onClick={() => setPreset('custom')}>
-            Tùy chỉnh
+          <button type="button" className={preset === 'custom' ? 'on' : ''} aria-pressed={preset === 'custom'} onClick={() => setPreset('custom')}>
+            <span className="builder-preset-icon"><Icon name="gear" /></span><span className="builder-preset-label">Tùy chỉnh<small>Tự chọn cấu trúc đề</small></span><span className="builder-preset-check">{preset === 'custom' && <Icon name="check" />}</span>
           </button>
         </div>
+        <h2 className="builder-field-heading"><Icon name="file" />Thông tin đề</h2>
         <div className="grid-2">
           <div className="field">
-            <label>Tên đề</label>
-            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <label htmlFor="builder-title">Tên đề</label>
+            <input id="builder-title" className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="row">
             <div className="field" style={{ flex: 1 }}>
-              <label>Thời gian (phút)</label>
-              <input className="input" type="number" min={5} value={bp.durationMin} onChange={(e) => setBp({ ...bp, durationMin: Number(e.target.value) })} />
+              <label htmlFor="builder-duration">Thời gian (phút)</label>
+              <input id="builder-duration" className="input" type="number" min={5} value={bp.durationMin} onChange={(e) => setBp({ ...bp, durationMin: Number(e.target.value) })} />
             </div>
             <div className="field" style={{ flex: 1 }}>
-              <label>Số mã đề</label>
-              <input className="input" type="number" min={1} max={8} value={variants} onChange={(e) => setVariants(Number(e.target.value))} />
+              <label htmlFor="builder-variants">Số mã đề</label>
+              <input id="builder-variants" className="input" type="number" min={1} max={8} value={variants} onChange={(e) => setVariants(Number(e.target.value))} />
             </div>
           </div>
         </div>
@@ -123,16 +121,16 @@ export function ExamBuilder() {
             <div className="row">
               {(['mcq', 'tf', 'short'] as const).map((t) => (
                 <div key={t} className="field" style={{ flex: 1 }}>
-                  <label>{meta.types[t]}</label>
-                  <input className="input" type="number" min={0} max={40} value={bp.counts[t]} onChange={(e) => setBp({ ...bp, counts: { ...bp.counts, [t]: Number(e.target.value) } })} />
+                  <label htmlFor={`builder-count-${t}`}>{meta.types[t]}</label>
+                  <input id={`builder-count-${t}`} className="input" type="number" min={0} max={40} value={bp.counts[t]} onChange={(e) => setBp({ ...bp, counts: { ...bp.counts, [t]: Number(e.target.value) } })} />
                 </div>
               ))}
             </div>
             <div className="row">
               {[1, 2, 3].map((l) => (
                 <div key={l} className="field" style={{ flex: 1 }}>
-                  <label>% {meta.levels[l]}</label>
-                  <input className="input" type="number" min={0} max={100} value={bp.levels[l]} onChange={(e) => setBp({ ...bp, levels: { ...bp.levels, [l]: Number(e.target.value) } })} />
+                  <label htmlFor={`builder-level-${l}`}>% {meta.levels[l]}</label>
+                  <input id={`builder-level-${l}`} className="input" type="number" min={0} max={100} value={bp.levels[l]} onChange={(e) => setBp({ ...bp, levels: { ...bp.levels, [l]: Number(e.target.value) } })} />
                 </div>
               ))}
             </div>
@@ -155,8 +153,9 @@ export function ExamBuilder() {
             ))}
           </div>
         </details>
-        <div>
-          <button className="btn primary big" disabled={busy || total === 0} onClick={generate}>
+        <div className="builder-footer">
+          <div className="builder-live-summary"><span><Icon name="check" />Sử dụng câu hỏi đã duyệt</span><strong>{total} câu <span>·</span> {bp.durationMin} phút <span>·</span> {variants} mã đề</strong></div>
+          <button className="btn primary big builder-generate" disabled={busy || total === 0} onClick={generate}><Icon name="practice" />
             {busy ? 'Đang sinh đề…' : gen ? 'Sinh lại' : 'Sinh đề'}
           </button>
         </div>
@@ -175,7 +174,7 @@ export function ExamBuilder() {
             </div>
           ))}
           <div className="card">
-            <h2>Ma trận đề</h2>
+            <h2 className="builder-result-heading"><Icon name="chart" />Ma trận đề</h2>
             <div className="table-wrap">
               <table className="t">
                 <thead>

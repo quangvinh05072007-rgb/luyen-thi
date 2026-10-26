@@ -1,0 +1,27 @@
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
+const dir=__dirname,html=fs.readFileSync(path.join(dir,'Kho nhan vat 2 - Rig nu v2.html'),'utf8'),a=html.indexOf('function createCharacterRig(){'),b=html.indexOf('\nvar RIG = createCharacterRig();',a),factory=()=>new Function(html.slice(a,b)+';return createCharacterRig();')(),rig=factory();
+assert.equal(typeof rig.childrenCatalog,'function','Children need their own wardrobe catalog');
+const base={gender:'male',ageGroup:'child',outfit:'kb_dungarees',hairStyle:'cb_tousled',pose:'stand',skin:'#efceb0',hair:'#493127',eye:'#71513b',eyeStyle:'normal',expr:'smile',acc:'none',c1:'#a96b54',c2:'#567c9b',c3:'#d9b765'};
+const child=rig.render(base),adult=rig.render({...base,ageGroup:'adult',outfit:'m_polo',hairStyle:'shortcrop'});
+const dist=(a,b)=>Math.hypot(...a.map((x,i)=>x-b[i]));
+assert.ok(dist(child.joints.hpL,child.joints.anL)<dist(adult.joints.hpL,adult.joints.anL)*.65,'Shorter actual child legs, not a small adult');
+assert.ok(dist(child.joints.shL,child.joints.wrL)<dist(adult.joints.shL,adult.joints.wrL)*.62,'Shorter child arms');
+assert.match(child.svg,/data-child-head/);assert.doesNotMatch(child.svg,/male-beard/);
+for(const view of ['front','side','right']){const expressions=['smile','neutral','sad','shy','grin','creepy'].map(expr=>factory().render({...base,blush:true,expr},{view}).svg);assert.equal(new Set(expressions).size,6,'All retained child expressions must visibly differ in '+view);}
+let count=0;
+for(const gender of ['male','female']){const cat=rig.childrenCatalog(gender);assert.equal(cat.hair.length,6);assert.equal(cat.outfits.length,6);
+ for(const [outfit] of cat.outfits)for(const view of ['front','side','right','back'])for(const [pose] of rig.poses){const r=rig.render({...base,gender,outfit,hairStyle:cat.hair[0][0],pose},{view,time:.45});assert.ok(!/NaN|Infinity|undefined/.test(r.svg),outfit+' '+view+' '+pose);assert.match(r.svg,/data-child-outfit/);count++;}
+ for(const [hairStyle] of cat.hair)for(const view of ['front','side','right','back']){const r=rig.render({...base,gender,outfit:cat.outfits[0][0],hairStyle},{view});assert.match(r.svg,/data-child-hair/);assert.ok(!/NaN|Infinity|undefined/.test(r.svg));if(view==='back')assert.doesNotMatch(r.svg,/class="child-eye"/);count++;}
+ assert.equal(rig.choices({...base,gender},'hair',[]).length,6);
+}
+const ctx={PRESETS:[{s:base},{s:base},{s:base}],Object,Date,JSON,RIG:rig,cf:s=>s};vm.createContext(ctx);vm.runInContext(fs.readFileSync(path.join(dir,'character-types-presets.js'),'utf8'),ctx);
+const db={items:[{id:'old',name:'Bé riêng',s:{...base,templateKey:'child-boy',hairStyle:'messy',outfit:'m_polo',c1:'#112233'},tags:[],t:1},{id:'edited',name:'Đã chỉnh',s:{...base,templateKey:'child-girl',gender:'female',outfit:'kg_overalls',hairStyle:'cg_waves'},tags:[],t:2}],cur:'old',prefs:{characterTypesV1:true,characterTypesV2:true,maleWardrobeV1:true}};
+ctx.migrateCharacterTypes(db);assert.equal(db.items.length,2);assert.equal(db.items[0].s.outfit,'kb_dungarees');assert.equal(db.items[0].s.hairStyle,'cb_tousled');assert.equal(db.items[0].s.c1,'#112233');assert.equal(db.items[1].s.outfit,'kg_overalls');assert.equal(db.items[1].s.hairStyle,'cg_waves');assert.equal(ctx.migrateCharacterTypes(db),false);
+const thumb=rig.frameBox(base,[62,0,256,276],'portrait'),sceneHeadY=70+.77*child.joints.head[1];assert.ok(sceneHeadY>thumb[1]&&sceneHeadY<thumb[1]+thumb[3],'Portrait must follow the shorter skeleton');
+const live=factory();live.render({...base,ageGroup:'adult'},{live:true,dt:.016,time:.2});const expected=rig.render(base,{time:.2}).joints;const actual=live.render(base,{live:true,dt:.016,time:.2}).joints;assert.ok(Math.abs(dist(actual.hpL,actual.anL)-dist(expected.hpL,expected.anL))<1e-4,'Adult anatomy must not leak into child playback');
+const allHair=[['long','Dài']].concat(rig.catalog().hair,rig.childrenCatalog('all').hair),allOutfits=[['casual','Thun'],['dress','Váy']].concat(rig.catalog().outfits,rig.childrenCatalog('all').outfits),events={};
+const editor={TABS:[['A','user',[]]],S:{...base},RIG:rig,HAIRS:allHair,OUTFITS:allOutfits,summary:()=>'',appearanceLabel:(l,k)=>(l.find(x=>x[0]===k)||l[0])[1],beforeTypesSecBody:s=>s.list.map(x=>x.k).join(','),$:()=>({addEventListener:(t,fn)=>events[t]=fn}),change:()=>{},legacyCamBox:()=>[0,0,380,740]};vm.createContext(editor);vm.runInContext(fs.readFileSync(path.join(dir,'character-types-editor.js'),'utf8'),editor);
+const sec={id:'outfit',list:allOutfits.map(x=>({k:x[0],n:x[1]}))};let options=editor.secBody(sec);assert.match(options,/kb_school/);assert.doesNotMatch(options,/m_office|kg_school/);assert.doesNotMatch(editor.secBody({id:'identity'}),/data-identity-key="facialHair"/);
+events.change({target:{hasAttribute:()=>true,dataset:{identityKey:'gender'},value:'female'}});assert.equal(editor.S.ageGroup,'child');assert.ok(editor.S.hairStyle.startsWith('cg_'));assert.ok(editor.S.outfit.startsWith('kg_'));assert.equal(editor.S.c1,base.c1);
+events.change({target:{hasAttribute:()=>true,dataset:{identityKey:'ageGroup'},value:'adult'}});assert.equal(editor.S.hairStyle,'long');assert.equal(editor.S.outfit,'casual');assert.equal(editor.S.c1,base.c1);
+console.log('PASS 12 child hairstyles, 12 outfits; '+count+' motion/view renders; shorter skeleton, child face, scoped choices, migration, portrait and live anatomy');

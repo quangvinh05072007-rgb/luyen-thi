@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, download, post } from '../../api';
 import { MathText } from '../../ui/MathText';
-import { go, LevelBadge, topicName, TypeBadge, useApp, useRoute } from '../../ui/kit';
+import { PageHeading, go, LevelBadge, topicName, TypeBadge, Icon, useApp, useRoute } from '../../ui/kit';
 import { QuestionEditor } from '../../ui/QuestionEditor';
+import ImportJobsPanel from '../../ui/ImportJobsPanel';
 
 const SAMPLE = `PHẦN I
 Câu 1. Đạo hàm của hàm số $y = x^4$ là
@@ -30,18 +31,68 @@ function problems(q: any) {
 
 export function ImportPage() {
   const { meta, toast } = useApp();
+  const { query } = useRoute();
+  const classId=query.get('classId');
+  const classSuffix=classId&&/^\d+$/.test(classId)?`?classId=${classId}`:'';
   const [mode, setMode] = useState<'file' | 'text'>('file');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [readingPdf, setReadingPdf] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ questions: any[]; warnings: string[]; info: any; origin: string } | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [saved, setSaved] = useState<number[] | null>(null);
+  const [jobId,setJobId]=useState<number|null>(null);
+  const [jobsRefresh,setJobsRefresh]=useState(0);
+  const [draftStatus, setDraftStatus] = useState<'saved' | 'saving' | 'dirty' | null>(null);
+  const [hasDraft, setHasDraft] = useState(false);
+  const [originalQuestions, setOriginalQuestions] = useState<any[] | null>(null);
+  const saveTimerRef = useRef<any>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const keyRef = useRef<HTMLInputElement>(null);
   const [riskFirst, setRiskFirst] = useState(true);
   const [rawOpen, setRawOpen] = useState<Set<number>>(new Set());
   const [keyMsg, setKeyMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (draftStatus === 'dirty' || draftStatus === 'saving') {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [draftStatus]);
+
+  const triggerDraftSave = (newQuestions: any[]) => {
+    if (!jobId || saved) return;
+    setDraftStatus('saving');
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        await api('PUT', `/api/import/jobs/${jobId}/draft`, { questions: newQuestions });
+        setDraftStatus('saved');
+        setHasDraft(true);
+      } catch {
+        setDraftStatus('dirty');
+      }
+    }, 1200);
+  };
+
+  const revertToOriginal = async () => {
+    if (!originalQuestions || !jobId) return;
+    if (!confirm('Khôi phục lại danh sách câu hỏi gốc nhận diện ban đầu và xóa các chỉnh sửa nháp?')) return;
+    try {
+      await api('DELETE', `/api/import/jobs/${jobId}/draft`);
+      setResult((cur: any) => cur && { ...cur, questions: originalQuestions });
+      setHasDraft(false);
+      setDraftStatus(null);
+      toast('Đã khôi phục kết quả nhận diện gốc.');
+    } catch (e: any) {
+      toast(e.message);
+    }
+  };
 
   // Nạp file đáp án rời, đối chiếu với các câu đang duyệt; nguồn nào mâu thuẫn thì câu bị để trống và đánh dấu.
   const loadKey = async (file: File) => {
@@ -61,23 +112,30 @@ export function ImportPage() {
     }
   };
 
-  const parseFile = async (file: File) => {
+  const parseFiles = async (files: File[]) => {
+    if (busy) return;
+    if(files.length>10){setError('Mỗi lần chọn tối đa 10 file.');return;}
     setBusy(true);
+    setReadingPdf(false);
     setError(null);
     setSaved(null);
     try {
-      const buf = await file.arrayBuffer();
-      const r = await api('POST', `/api/import?filename=${encodeURIComponent(file.name)}`, undefined, { raw: buf, timeoutMs: 120000 });
-      setResult({ ...r, origin: file.name });
-      setOpen(null);
+      let queued=0;
+      for(const file of files) {
+        await api('POST', `/api/import/jobs?filename=${encodeURIComponent(file.name)}`, undefined, { raw: await file.arrayBuffer() });queued++;
+        setJobsRefresh(v=>v+1);
+      }
+      toast(`Đã đưa ${queued} file vào hàng đợi. Bạn có thể rời trang khi đang xử lý.`);
     } catch (e: any) {
       setError(e.message);
     } finally {
       setBusy(false);
+      setReadingPdf(false);
       if (fileRef.current) fileRef.current.value = '';
     }
   };
   const parseText = async () => {
+    setJobId(null);
     setBusy(true);
     setError(null);
     setSaved(null);
@@ -90,13 +148,27 @@ export function ImportPage() {
       setBusy(false);
     }
   };
-  const update = (i: number, q: any) => setResult((r) => r && { ...r, questions: r.questions.map((x, k) => (k === i ? { ...x, ...q, tagConfidence: 1 } : x)) });
-  const remove = (i: number) => setResult((r) => r && { ...r, questions: r.questions.filter((_, k) => k !== i) });
+  const update = (i: number, q: any) => {
+    setResult((r) => {
+      if (!r) return r;
+      const nextQuestions = r.questions.map((x, k) => (k === i ? { ...x, ...q, tagConfidence: 1 } : x));
+      triggerDraftSave(nextQuestions);
+      return { ...r, questions: nextQuestions };
+    });
+  };
+  const remove = (i: number) => {
+    setResult((r) => {
+      if (!r) return r;
+      const nextQuestions = r.questions.filter((_, k) => k !== i);
+      triggerDraftSave(nextQuestions);
+      return { ...r, questions: nextQuestions };
+    });
+  };
   const save = async () => {
     if (!result) return;
     setBusy(true);
     try {
-      const r = await post('/api/import/save', { questions: result.questions, origin: result.origin });
+      const r = await post('/api/import/save', { questions: result.questions, origin: result.origin,jobId });
       setSaved(r.ids);
       toast(`Đã lưu ${r.ids.length} câu vào ngân hàng ở trạng thái nháp.`);
     } catch (e: any) {
@@ -107,10 +179,13 @@ export function ImportPage() {
   };
   const approveValid = async () => {
     if (!saved) return;
-    const r = await post('/api/questions/approve', { ids: saved });
-    toast(`Đã duyệt ${r.approved.length} câu.${r.rejected.length ? ` ${r.rejected.length} câu cần sửa thêm ở Ngân hàng.` : ''}`);
-    const cid=new URLSearchParams(location.hash.split('?')[1]??'').get('classId');
-    go(`/ngan-hang${cid&&/^\d+$/.test(cid)?`?classId=${cid}`:''}`);
+    setBusy(true);
+    try {
+      const ids=saved.filter((_,i)=>problems(result?.questions[i] ?? {}).length===0);
+      const r = await post('/api/questions/approve', { ids });
+      toast(`Đã duyệt ${r.approved.length} câu.${r.pending?.length ? ` ${r.pending.length} câu chờ người duyệt thứ hai.` : ''}${r.rejected.length ? ` ${r.rejected.length} câu cần sửa thêm ở Ngân hàng.` : ''}`);
+      go(`/ngan-hang${classSuffix}`);
+    } catch(e:any) {toast(e.message);} finally {setBusy(false);}
   };
 
   const qs = result?.questions ?? [];
@@ -123,16 +198,38 @@ export function ImportPage() {
   const risky = qs.filter((q) => q.suspicion && q.suspicion.level !== 'low').length;
   const ready = qs.filter((q) => problems(q).length === 0).length;
   return (
-    <div className="stack">
-      <div>
-        <h1>Nhập đề</h1>
-        <p className="muted small">Không cần gõ lại: máy tách câu, phương án, đáp án, lời giải và đoán chuyên đề, mức độ. Bạn kiểm tra, sửa rồi lưu. Câu nhập vào mang nhãn Imported và ở trạng thái nháp.</p>
-      </div>
+    <div className="stack import-page">
+      <PageHeading title="Nhập đề" icon="import" description="Tách câu hỏi từ file, kiểm tra và lưu vào ngân hàng." />
+      <ol className="import-steps" aria-label="Quy trình nhập đề">
+        {['Chọn nguồn đề','Kiểm tra câu hỏi','Lưu vào ngân hàng'].map((label,i)=>{
+          const current=saved ? 2 : result ? 1 : 0;
+          return <li key={label} className={i<current?'complete':i===current?'current':''} aria-current={i===current?'step':undefined}><span aria-hidden="true">{i<current?<Icon name="check"/>:i+1}</span>{label}</li>;
+        })}
+      </ol>
+      <ImportJobsPanel
+        refresh={jobsRefresh}
+        onOpen={(job) => {
+          const isDraft = Boolean(job.draftQuestions?.length);
+          const questions = isDraft ? job.draftQuestions : (job.result?.questions ?? []);
+          setOriginalQuestions(job.result?.questions ?? []);
+          setHasDraft(isDraft);
+          setResult({
+            ...job.result,
+            questions,
+            origin: job.name,
+          });
+          setSaved(job.savedIds);
+          setJobId(job.id);
+          setOpen(null);
+          setError(null);
+          setDraftStatus(isDraft ? 'saved' : null);
+        }}
+      />
       {!result && (
         <div className="card">
           <div className="seg mb">
             <button className={mode === 'file' ? 'on' : ''} onClick={() => setMode('file')}>
-              Tải file
+              Chọn file
             </button>
             <button className={mode === 'text' ? 'on' : ''} onClick={() => setMode('text')}>
               Dán văn bản
@@ -141,29 +238,39 @@ export function ImportPage() {
           {mode === 'file' ? (
             <div className="stack">
               <label
-                className="card flat center"
-                style={{ borderStyle: 'dashed', cursor: 'pointer', padding: 32 }}
+                className="import-dropzone"
+                style={{ borderStyle: 'dashed', cursor: 'pointer' }}
+                role="button"
+                tabIndex={0}
+                aria-label="Chọn file đề thi"
+                aria-disabled={busy}
+                onKeyDown={(e) => {
+                  if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    if (!busy) fileRef.current?.click();
+                  }
+                }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault();
-                  const f = e.dataTransfer.files[0];
-                  if (f) parseFile(f);
+                  if(e.dataTransfer.files.length)parseFiles(Array.from(e.dataTransfer.files));
                 }}
               >
-                <input ref={fileRef} type="file" hidden accept=".docx,.pdf,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp" onChange={(e) => e.target.files?.[0] && parseFile(e.target.files[0])} />
-                <div className="strong">{busy ? 'Đang đọc file…' : 'Kéo thả file vào đây hoặc bấm để chọn'}</div>
-                <div className="small muted">Word .docx (đọc cả công thức Equation, đáp án gạch chân/tô đỏ), PDF có chữ, Excel .xlsx/.csv theo mẫu, .txt. Ảnh cần bật AI.</div>
+                <input ref={fileRef} type="file" multiple hidden disabled={busy} accept=".docx,.pdf,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp" onChange={(e) => e.target.files?.length && parseFiles(Array.from(e.target.files))} />
+                <span className="page-intro-icon"><Icon name="upload" /></span><div className="strong" role="status">{busy ? 'Đang đưa file vào hàng đợi…' : 'Kéo thả file vào đây hoặc bấm để chọn'}</div>
+                <div className="small muted">Word, PDF có chữ hoặc scan, Excel/CSV và văn bản. PDF scan tự OCR trên máy, giữ công thức và hình trong ảnh từng câu; có thể mất vài phút.</div>
               </label>
               <div className="row small">
                 <button className="btn sm" onClick={() => download('/api/import/template.csv', 'mau-nhap-cau-hoi.csv').catch((e) => toast(e.message))}>
                   Tải file Excel/CSV mẫu
                 </button>
-                {!meta.aiEnabled && <span className="tiny muted">Nhập ảnh: {meta.aiHint}</span>}
+                {!meta.aiEnabled && <span className="tiny muted">PDF scan được OCR trên máy. Ảnh JPG/PNG riêng lẻ cần bật AI trong phần Tài khoản.</span>}
               </div>
+              <div className="import-next small"><Icon name="bank"/><span>Sau khi nhập, duyệt câu hỏi trong <a href={`#/ngan-hang${classSuffix}`}>Ngân hàng câu hỏi</a>, rồi <a href={`#/ra-de${classSuffix}`}>tạo đề để giao cho lớp</a>.</span></div>
             </div>
           ) : (
             <div className="stack">
-              <textarea className="input" style={{ minHeight: 260, fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 13 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={'Dán đề vào đây. Mỗi câu bắt đầu bằng "Câu 1.", phương án "A. B. C. D.", ý đúng/sai "a) b) c) d)". Đánh dấu đáp án bằng * hoặc dòng "Đáp án: B".'} />
+              <textarea className="input" aria-label="Nội dung đề thi" style={{ minHeight: 190, fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 13 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={'Dán đề vào đây. Mỗi câu bắt đầu bằng "Câu 1.", phương án "A. B. C. D.", ý đúng/sai "a) b) c) d)". Đánh dấu đáp án bằng * hoặc dòng "Đáp án: B".'} />
               <div className="row between">
                 <button className="btn ghost sm" onClick={() => setText(SAMPLE)}>
                   Dùng đoạn mẫu
@@ -180,7 +287,7 @@ export function ImportPage() {
 
       {result && (
         <>
-          <div className="card">
+          <div className="card import-result-summary">
             <div className="row between">
               <div>
                 <div className="strong">
@@ -189,6 +296,7 @@ export function ImportPage() {
                 <div className="small muted">
                   {ready} câu đủ thông tin · {qs.length - ready} câu cần bổ sung
                   {result.info?.equations ? ` · đọc ${result.info.equations} công thức` : ''}
+                  {result.info?.ocr ? ` · OCR ${result.info.ocrPages} trang · giữ ảnh gốc` : ''}
                 </div>
               </div>
               <div className="row">
@@ -197,26 +305,39 @@ export function ImportPage() {
                   onClick={() => {
                     setResult(null);
                     setSaved(null);
+                    setJobId(null);
                   }}
                 >
-                  Nhập file khác
+                  Nhập đề khác
                 </button>
                 {!saved ? (
                   <button className="btn primary" disabled={busy || !qs.length} onClick={save}>
                     Lưu {qs.length} câu vào ngân hàng
                   </button>
                 ) : (
-                  <button className="btn good" onClick={approveValid}>
+                    <button className="btn good" disabled={busy || ready===0} onClick={approveValid}>
                     Duyệt {ready} câu hợp lệ
                   </button>
                 )}
               </div>
             </div>
-            <div className="row mt small" style={{ gap: 8 }}>
+            <div className="row mt small" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span className="muted">{risky} câu cần xem kỹ</span>
               <label className="row" style={{ gap: 4 }}>
                 <input type="checkbox" checked={riskFirst} onChange={(e) => setRiskFirst(e.target.checked)} /> Câu đáng ngờ lên trước
               </label>
+              {jobId && !saved && (
+                <div className="row" style={{ gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
+                  {draftStatus === 'saving' && <span className="tiny muted">💾 Đang lưu nháp…</span>}
+                  {draftStatus === 'saved' && <span className="tiny text-success" style={{ color: '#16a34a', fontWeight: 600 }}>✓ Đã lưu nháp tự động</span>}
+                  {draftStatus === 'dirty' && <span className="tiny text-warning" style={{ color: '#d97706' }}>⚠️ Chưa lưu được nháp</span>}
+                  {hasDraft && (
+                    <button type="button" className="btn ghost sm" onClick={revertToOriginal} style={{ fontSize: 11, padding: '2px 8px' }}>
+                      ↺ Khôi phục bản gốc OCR
+                    </button>
+                  )}
+                </div>
+              )}
               {!saved && (
                 <>
                   <input ref={keyRef} type="file" hidden accept=".docx,.pdf,.xlsx,.csv,.txt" onChange={(e) => e.target.files?.[0] && loadKey(e.target.files[0])} />
@@ -227,12 +348,12 @@ export function ImportPage() {
               )}
             </div>
             {keyMsg && <div className="alert warn small mt">{keyMsg}</div>}
-            {result.warnings.map((w, i) => (
+            {result.warnings.length>0 && <details className="import-notes"><summary>Thông tin nhận dạng ({result.warnings.length})</summary>{result.warnings.map((w, i) => (
               <div key={i} className="alert warn small mt">
                 {w}
               </div>
-            ))}
-            {saved && <div className="alert ok small mt">Đã lưu dạng nháp. Duyệt ngay các câu hợp lệ, hoặc vào Ngân hàng để sửa thêm.</div>}
+            ))}</details>}
+            {saved && <div className="alert ok small mt">Đã lưu {saved.length} câu nháp. <a href={`#/ngan-hang${classSuffix}`}>Mở ngân hàng để sửa và duyệt câu hỏi</a>. Câu đã duyệt có thể dùng để tạo đề.</div>}
           </div>
           <div className="stack">
             {order.map((i) => {
@@ -283,13 +404,14 @@ export function ImportPage() {
                       </>
                     )}
                   </div>
-                  {q.suspicion && q.suspicion.level !== 'low' && (
+                  {q.suspicion && q.suspicion.level !== 'low' && <details className="import-question-notes" open={p.length>0}>
+                    <summary>Lưu ý cần kiểm tra ({q.suspicion.reasons.length})</summary>
                     <ul className="tiny mb" style={{ margin: '0 0 6px', paddingLeft: 18, color: 'var(--warn)' }}>
                       {q.suspicion.reasons.map((r: string, k: number) => (
                         <li key={k}>{r}</li>
                       ))}
                     </ul>
-                  )}
+                  </details>}
                   {rawOpen.has(i) && (
                     <div className="grid-2 mb" style={{ gap: 8 }}>
                       <div>
@@ -314,6 +436,7 @@ export function ImportPage() {
                   ) : (
                     <>
                       <MathText as="div" className="q-stem" text={q.stem} />
+                      {q.ocrText && <details className="small muted mt"><summary>Chữ OCR tham khảo · Phần {q.part}, câu {q.num}{q.scanPages ? ` · trang ${q.scanPages.join(', ')}` : ''}</summary><pre style={{whiteSpace:'pre-wrap',fontFamily:'inherit'}}>{q.ocrText}</pre></details>}
                       {q.type !== 'short' && (
                         <div className="grid-2 mt" style={{ gap: 4 }}>
                           {q.options.map((o: string, k: number) => (
@@ -325,7 +448,7 @@ export function ImportPage() {
                         </div>
                       )}
                       {q.type === 'short' && <div className="small mt">Đáp án: <b>{q.answer ?? '—'}</b></div>}
-                      {q.warnings?.filter((w: string) => !w.startsWith('Chưa có đáp án')).map((w: string, k: number) => (
+                      {q.warnings?.filter((w: string) => !w.startsWith('Chưa có đáp án') && !w.startsWith('Nội dung chính là ảnh gốc')).map((w: string, k: number) => (
                         <div key={k} className="tiny" style={{ color: 'var(--warn)' }}>
                           {w}
                         </div>

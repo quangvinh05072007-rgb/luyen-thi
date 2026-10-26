@@ -1,3 +1,4 @@
+import { matchesSearch } from '../../../shared/search.mjs';
 import { useState } from 'react';
 import { get, post } from '../../api';
 import { ErrorBox, Icon, Loading, Modal, useApp, useAsync } from '../../ui/kit';
@@ -27,6 +28,11 @@ export function Classes() {
     () => get<ClassesResponse>(`/api/classes${scope === 'all' ? '?scope=all' : ''}`),
     [scope]
   );
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sortDescending, setSortDescending] = useState(false);
+  const [groupByGrade, setGroupByGrade] = useState(true);
+  const [showCodes, setShowCodes] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -48,7 +54,7 @@ export function Classes() {
     const matchGrade = selectedGrade === 'all' || c.grade === Number(selectedGrade);
     const matchSearch =
       !search.trim() ||
-      `${c.name} ${c.teacher ?? ''} ${c.code ?? ''}`.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi'));
+      matchesSearch(`${c.name} ${c.teacher ?? ''} ${c.code ?? ''}`, search);
     return matchGrade && matchSearch;
   });
 
@@ -88,70 +94,50 @@ export function Classes() {
     }
   };
 
+  const sortedClasses = [...filtered].sort((a, b) => (sortDescending ? -1 : 1) * a.name.localeCompare(b.name, 'vi', { numeric: true }));
+  const groups = groupByGrade
+    ? [12, 11, 10].map(grade => ({ key: String(grade), label: `Khối ${grade}`, classes: sortedClasses.filter(c => c.grade === grade) })).filter(group => group.classes.length)
+    : [{ key: 'all', label: 'Tất cả', classes: sortedClasses }];
+  const allCollapsed = groups.length > 0 && groups.every(group => collapsedGroups.has(group.key));
+  const toggleGroup = (key: string) => setCollapsedGroups(current => {
+    const next = new Set(current);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
+
   return (
-    <div className="classes-page">
-      <header className="classes-heading">
-        <div><h1>Lớp học</h1><p>Quản lý lớp, kết nối học sinh.</p></div>
-        <div className="classes-heading-actions">
-          {user.role === 'admin' && <a className="classes-text-action" href="#/nguoi-dung">Quản lý tài khoản</a>}
-          <button type="button" className="btn primary classes-create" onClick={() => setShowCreate(true)}><Icon name="plus" /> Tạo lớp mới</button>
+    <div className="class-directory">
+      <header className="directory-heading">
+        <div><h1>Danh sách lớp</h1><p role="status" title={`${totalStudents} học sinh · ${totalActiveExams} bài thi đang mở`}>{loading ? 'Đang tải…' : `${filtered.length} lớp`}</p></div>
+        <div className="directory-heading-actions">
+          <button type="button" className="btn primary" onClick={() => setShowCreate(true)}><Icon name="plus" />Thêm</button>
+          <button type="button" className={`btn${filtersOpen ? ' is-selected' : ''}`} onClick={() => setFiltersOpen(value => !value)} aria-expanded={filtersOpen} aria-controls="directory-filters"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M3 4h18l-7 8v7l-4-2v-5Z" /></svg>Bộ lọc{selectedGrade !== 'all' && <span className="directory-filter-dot" />}</button>
+          <details className="directory-settings" onKeyDown={e => { if (e.key === 'Escape') e.currentTarget.open = false; }}>
+            <summary className="btn directory-icon-button" aria-label="Tùy chọn hiển thị lớp" title="Tùy chọn hiển thị"><Icon name="gear" /></summary>
+            <div className="directory-settings-panel"><strong>Hiển thị danh sách</strong><label className="check"><input type="checkbox" checked={groupByGrade} onChange={e => {setGroupByGrade(e.target.checked);setCollapsedGroups(new Set());}} />Nhóm lớp theo khối</label><label className="check"><input type="checkbox" checked={showCodes} onChange={e => setShowCodes(e.target.checked)} />Hiện mã tham gia</label>{user.role === 'admin' && <a href="#/nguoi-dung">Quản lý tài khoản và phân công</a>}</div>
+          </details>
         </div>
       </header>
-      {data && <dl className="classes-summary" aria-label="Tổng quan lớp học">
-        <div><dt>{scope === 'mine' ? 'lớp phụ trách' : 'lớp toàn trường'}</dt><dd>{classes.length}</dd></div>
-        <div><dt>học sinh</dt><dd>{totalStudents}</dd></div>
-        <div className={totalActiveExams > 0 ? 'has-active' : ''}><dt>bài thi đang mở</dt><dd>{totalActiveExams}</dd></div>
-      </dl>}
-      <div className="classes-navigation">
-        <div className="classes-scope" role="group" aria-label="Phạm vi lớp học">
-          <button type="button" aria-pressed={scope === 'mine'} className={scope === 'mine' ? 'is-active' : ''} onClick={() => setScope('mine')}>Lớp của tôi{data?.myCount !== undefined ? ` (${data.myCount})` : ''}</button>
-          <button type="button" aria-pressed={scope === 'all'} className={scope === 'all' ? 'is-active' : ''} onClick={() => setScope('all')}>Toàn trường{data?.totalAllCount !== undefined ? ` (${data.totalAllCount})` : ''}</button>
-        </div>
-        <label className="classes-search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg>
-          <input type="search" aria-label="Tìm lớp học" placeholder="Tìm tên lớp, mã hoặc giáo viên…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </label>
+      <div className="directory-searchbar">
+        <label className="directory-search"><input type="search" aria-label="Tìm lớp học" placeholder="Tìm kiếm theo tên lớp, mã hoặc giáo viên" value={search} onChange={e => setSearch(e.target.value)} /><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg></label>
+        <button type="button" className="btn directory-sort" onClick={() => setSortDescending(value => !value)} aria-label={sortDescending ? 'Sắp xếp tên lớp tăng dần' : 'Sắp xếp tên lớp giảm dần'}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M7 4v16m-4-4 4 4 4-4M17 20V4m-4 4 4-4 4 4" /></svg>Sắp xếp theo tên<span className="directory-sort-direction">{sortDescending ? 'Z–A' : 'A–Z'}</span></button>
+        <button type="button" className="btn directory-icon-button" aria-label={allCollapsed ? 'Mở tất cả nhóm lớp' : 'Thu gọn tất cả nhóm lớp'} onClick={() => setCollapsedGroups(allCollapsed ? new Set() : new Set(groups.map(group => group.key)))}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d={allCollapsed ? 'm8 8 4 4 4-4m-8 6 4 4 4-4' : 'm8 9 4-4 4 4m-8 6 4 4 4-4'} /></svg></button>
       </div>
-      <div className="classes-filterbar">
-        <div className="classes-grades" role="group" aria-label="Lọc theo khối">
-          {(['all', '12', '11', '10'] as const).map((grade) => <button key={grade} type="button" aria-pressed={selectedGrade === grade} className={selectedGrade === grade ? 'is-active' : ''} onClick={() => setSelectedGrade(grade)}>{grade === 'all' ? 'Tất cả' : `Khối ${grade}`} <span>{gradeCounts[grade]}</span></button>)}
-        </div>
-        {data && <span className="classes-result-count" role="status">{filtered.length} lớp học</span>}
-      </div>
+      {filtersOpen && <section className="directory-filters" id="directory-filters" aria-label="Bộ lọc lớp học">
+        <div><span>Phạm vi</span><div className="seg"><button type="button" aria-pressed={scope === 'mine'} className={scope === 'mine' ? 'on' : ''} onClick={() => setScope('mine')}>Lớp của tôi{data?.myCount !== undefined ? ` (${data.myCount})` : ''}</button><button type="button" aria-pressed={scope === 'all'} className={scope === 'all' ? 'on' : ''} onClick={() => setScope('all')}>Toàn trường{data?.totalAllCount !== undefined ? ` (${data.totalAllCount})` : ''}</button></div></div>
+        <label className="field"><span>Khối lớp</span><select className="select" value={selectedGrade} onChange={e => setSelectedGrade(e.target.value)}><option value="all">Tất cả ({gradeCounts.all})</option>{([12, 11, 10] as const).map(grade => <option key={grade} value={grade}>Khối {grade} ({gradeCounts[grade]})</option>)}</select></label>
+        <button type="button" className="btn ghost" onClick={() => {setSelectedGrade('all');setSearch('');}}>Xóa bộ lọc</button>
+      </section>}
       {loading && <Loading text="Đang tải lớp học…" />}
       {error && <ErrorBox error={error} onRetry={reload} />}
-      {data && (filtered.length === 0 ? (
-        <div className="classes-empty">
-          <Icon name="class" /><h2>{classes.length === 0 ? 'Chưa có lớp học' : 'Không tìm thấy lớp phù hợp'}</h2>
-          <p>{classes.length === 0 ? 'Tạo lớp đầu tiên và chia sẻ mã tham gia với học sinh.' : 'Thử tìm bằng tên khác hoặc chọn lại khối lớp.'}</p>
-          <div className="row">
-            {(search || selectedGrade !== 'all') && <button type="button" className="classes-text-action" onClick={() => { setSearch(''); setSelectedGrade('all'); }}>Xóa bộ lọc</button>}
-            {scope === 'mine' && <button type="button" className="classes-text-action" onClick={() => setScope('all')}>Xem toàn trường</button>}
-            {classes.length === 0 && <button type="button" className="btn primary" onClick={() => setShowCreate(true)}>Tạo lớp mới</button>}
-          </div>
-        </div>
-      ) : (
-        <section className="classes-list" aria-label="Danh sách lớp học">
-          {filtered.map((c) => <article key={c.id} className="class-list-row">
-            <div className={`class-list-mark grade-${c.grade}`} aria-hidden="true">{c.grade}<span>Khối</span></div>
-            <div className="class-list-identity">
-              <h2><a href={`#/lop/${c.id}`}>Lớp {c.name}</a>{scope === 'all' && c.mine && <span className="class-list-mine">Của bạn</span>}</h2>
-              <p>{c.teacher ?? 'Chưa phân công giáo viên'}</p>
-              {c.code && <div className="class-list-code"><span>Mã tham gia</span><strong>{c.code}</strong><button type="button" onClick={() => copyCode(c.code!)} aria-label={`Sao chép mã lớp ${c.name}`} title="Sao chép mã tham gia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></svg></button></div>}
-            </div>
-            <div className="class-list-students"><Icon name="class" /><strong>{c.students}</strong><span>học sinh</span></div>
-            <div className="class-list-activity">
-              {(c.active_assignments ?? 0) > 0 ? <span className="class-list-live"><span />{c.active_assignments} bài thi đang mở</span> : <span className="class-list-idle">Chưa có bài thi đang mở</span>}
-              <span>{c.total_assignments ?? 0} bài đã giao</span>
-            </div>
-            <div className="class-list-actions">
-              <a className="class-list-enter" href={`#/lop/${c.id}`} aria-label={`Vào lớp ${c.name}`}>Vào lớp <span aria-hidden="true">↗</span></a>
-              <div><a href={`#/thu-vien?classId=${c.id}`} aria-label={`Giao đề cho lớp ${c.name}`}>Giao đề</a><a href={`#/lop/${c.id}/ket-qua`} aria-label={`Xem điểm lớp ${c.name}`}>Bảng điểm</a></div>
-            </div>
-          </article>)}
-        </section>
-      ))}
-      {data && filtered.length > 0 && <p className="classes-footnote"><Icon name="class" />Chia sẻ mã tham gia để học sinh tự vào lớp.</p>}
+      {data && filtered.length === 0 && <div className="directory-empty"><Icon name="class" /><h2>{classes.length ? 'Không tìm thấy lớp phù hợp' : 'Chưa có lớp học'}</h2><p>{classes.length ? 'Thử từ khóa khác hoặc thay đổi bộ lọc.' : 'Tạo lớp mới và chia sẻ mã tham gia với học sinh.'}</p><div className="row">{classes.length > 0 && <button type="button" className="btn" onClick={() => {setSearch('');setSelectedGrade('all');}}>Xóa bộ lọc</button>}{scope === 'mine' && <button type="button" className="btn" onClick={() => setScope('all')}>Xem toàn trường</button>}<button type="button" className="btn primary" onClick={() => setShowCreate(true)}><Icon name="plus" />Thêm lớp</button></div></div>}
+      {data && filtered.length > 0 && <div className="directory-groups">{groups.map(group => <section key={group.key} className="directory-group">
+        <button type="button" className="directory-group-toggle" onClick={() => toggleGroup(group.key)} aria-expanded={!collapsedGroups.has(group.key)} aria-controls={`class-group-${group.key}`}><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d={collapsedGroups.has(group.key) ? 'm7 4 6 6-6 6' : 'm4 7 6 6 6-6'} /></svg>{group.label} ({group.classes.length} lớp)</button>
+        <div id={`class-group-${group.key}`} className="directory-class-grid" hidden={collapsedGroups.has(group.key)}>{group.classes.map(c => <article key={c.id} className="directory-class-card">
+          <a className="directory-class-open" href={`#/lop/${c.id}`} aria-label={`Vào lớp ${c.name}`}><h2>{c.name}</h2><div className="directory-class-meta"><span>Sĩ số: {c.students}</span><span>Khối {c.grade}</span></div>{showCodes && c.code && <p className="directory-visible-code">Mã: {c.code}</p>}</a>
+          <details className="directory-class-menu" onKeyDown={e => {if(e.key === 'Escape') e.currentTarget.open = false;}} onBlur={e => {if(!e.currentTarget.contains(e.relatedTarget as Node | null)) e.currentTarget.open = false;}}><summary aria-label={`Thao tác lớp ${c.name}`} title={`Thao tác lớp ${c.name}`}><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></summary><div className="directory-class-menu-panel"><p>{c.teacher ?? 'Chưa phân công giáo viên'}{(c.active_assignments ?? 0) > 0 && <span>{c.active_assignments} bài thi đang mở</span>}</p><a href={`#/lop/${c.id}`}><Icon name="class" />Vào lớp</a><a href={`#/thu-vien?classId=${c.id}`}><Icon name="exam" />Giao đề</a><a href={`#/lop/${c.id}/ket-qua`}><Icon name="chart" />Bảng điểm</a>{c.code && <button type="button" onClick={() => copyCode(c.code!)}><Icon name="file" />Sao chép mã lớp</button>}<a href={`#/lop/${c.id}/cai-dat`}><Icon name="gear" />Cài đặt lớp</a></div></details>
+        </article>)}</div>
+      </section>)}</div>}
       {showCreate && (
         <Modal title="Tạo lớp học mới" onClose={() => setShowCreate(false)}>
           <form onSubmit={handleCreateClass} className="stack" style={{ gap: 14 }}>
@@ -202,4 +188,3 @@ export function Classes() {
     </div>
   );
 }
-

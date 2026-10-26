@@ -1,0 +1,32 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),vm=require('node:vm');
+const dir=__dirname,html=fs.readFileSync(path.join(dir,'Kho nhan vat 2 - Rig nu v2.html'),'utf8');let a=html.indexOf('function createCharacterRig(){'),b=html.indexOf('\nvar RIG = createCharacterRig();',a);
+const factory=()=>new Function(html.slice(a,b)+';return createCharacterRig();')(),rig=factory(),base={outfit:'casual',hairStyle:'shortcrop',skin:'#e1b99b',hair:'#322a29',eye:'#604632',eyeStyle:'normal',expr:'smile',acc:'none',c1:'#6c7c75',c2:'#40536a',c3:'#ba9768',pose:'stand'};
+const f=rig.render(base),m=rig.render({...base,gender:'male'});
+assert.match(m.svg,/data-male-head/,'A male needs its own face artwork');
+const span=j=>Math.abs(j.shL[0]-j.shR[0])/Math.abs(j.hpL[0]-j.hpR[0]);assert.ok(span(m.joints)>span(f.joints)*1.35,'Male shoulders/hips must have different actual proportions');
+const live=factory(),maleCfg={...base,gender:'male'},maleStatic=live.render(maleCfg,{time:.2}).joints;
+live.render(base,{time:.2});let first=live.render(maleCfg,{live:true,play:true,dt:.016,time:.2}).joints;assert.ok(Math.abs(span(first)-span(maleStatic))<1e-6,'The first live male frame used stale female anatomy');
+live.render(base,{time:.2});first=live.render(maleCfg,{live:true,play:true,dt:.016,time:.2}).joints;assert.ok(Math.abs(span(first)-span(maleStatic))<1e-6,'A female thumbnail polluted male live anatomy');
+assert.equal(rig.gender({...base,templateKey:'child-boy'}),'male');assert.match(rig.render({...base,templateKey:'child-boy'}).svg,/data-male-head/);
+const legacy={...base,templateKey:'child-boy'};rig.render(legacy);assert.equal(legacy.gender,undefined);assert.equal(rig.gender({...legacy,gender:'female'}),'female');
+const ctx={PRESETS:[{s:base},{s:base},{s:base}],Object,Date,JSON,RIG:rig,cf:s=>({...base,...s})};vm.createContext(ctx);vm.runInContext(fs.readFileSync(path.join(dir,'character-types-presets.js'),'utf8'),ctx);
+const males=ctx.PRESETS.filter(p=>p.s.templateKey&&p.s.gender==='male'&&p.s.ageGroup!=='child');assert.equal(males.length,7);assert.ok(males.filter(p=>p.s.ageGroup==='elder').length>=3);
+const old={items:[{id:'mine',name:'Đã sửa',s:{...base,hair:'#ee3344'},tags:[],t:1}],cur:'mine',prefs:{characterTypesV1:true}};const kept=JSON.stringify(old.items[0]);ctx.migrateCharacterTypes(old);assert.equal(old.items.length,8);assert.equal(JSON.stringify(old.items[0]),kept);assert.equal(old.cur,'mine');ctx.migrateCharacterTypes(old);assert.equal(old.items.length,8);
+let n=0;for(const p of males)for(const view of ['front','side','right','back'])for(const [pose] of rig.poses){const r=rig.render({...p.s,pose},{view,time:.37});assert.ok(!/NaN|Infinity|undefined/.test(r.svg));if(view==='back'&&pose==='stand')assert.doesNotMatch(r.svg,/male-eye|male-beard/);n++;}
+assert.match(rig.render({...base,gender:'male',facialHair:'moustache'},{view:'side'}).svg,/male-beard/);
+assert.doesNotMatch(rig.render({...base,gender:'female',facialHair:'full'},{view:'front'}).svg,/male-beard/);
+// Test the real library filtering code as pure logic, without a browser.
+const libCode=fs.readFileSync(path.join(dir,'library-controls.js'),'utf8');
+const lib={DB:{items:ctx.PRESETS.filter(p=>p.s.templateKey).map((p,i)=>({id:String(i),name:p.n,s:p.s,t:i,tags:[],fav:i%2===0})),prefs:{}},F:{q:'',tag:'all',sort:'upd'},OUTFITS:[],HAIRS:[],norm:s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d'),pref:()=>[],characterCategory:ctx.characterCategory,characterGroupLabel:ctx.characterGroupLabel,esc:String};
+vm.createContext(lib);vm.runInContext(libCode.slice(0,libCode.indexOf('  function renderLib()')),lib);
+lib.LIB_GENDER='male';lib.LIB_AGE='elder';let filtered=lib.listItems();assert.equal(filtered.length,3);assert.ok(filtered.every(it=>it.s.gender==='male'&&it.s.ageGroup==='elder'));
+lib.F.q='rau bac';assert.equal(lib.listItems().length,1);lib.F.q='';lib.F.tag='@fav';assert.ok(lib.listItems().every(it=>it.fav));
+lib.F.tag='all';lib.LIB_AGE='child';assert.equal(lib.listItems().length,1);lib.LIB_GENDER='female';assert.equal(lib.listItems().length,2);
+assert.match(lib.libraryGroupFilters(),/Giới tính/);assert.match(lib.libraryGroupFilters(),/Cao tuổi/);
+assert.equal(ctx.characterCategory({templateKey:'child-boy',ageGroup:'child'},'Bé trai').gender,'male');assert.equal(ctx.characterCategory({},'Nữ sinh ma').age,'teen');
+const fields={libraryGenderFilter:{value:'male'},libraryAgeFilter:{value:'elder'},libraryOutfitFilter:{value:'all'}};let click,popup,redraw=0;
+lib.$=id=>id==='lib'?{addEventListener:(t,fn)=>click=fn}:fields[id];lib.pop=(b,h,fn)=>popup=fn;lib.closePop=()=>{};lib.renderLib=()=>redraw++;
+const eventStart=libCode.indexOf("  $('lib').addEventListener('click'"),eventEnd=libCode.indexOf("  $('lib').addEventListener('keydown'",eventStart);vm.runInContext(libCode.slice(eventStart,eventEnd),lib);
+click({target:{closest:()=>({id:'libraryFilter',hasAttribute:()=>false})}});popup({target:{closest:s=>s==='[data-apply-library-filters]'?{}:null}});assert.equal(lib.LIB_GENDER,'male');assert.equal(lib.LIB_AGE,'elder');assert.equal(redraw,1);
+click({target:{closest:()=>({id:'',hasAttribute:()=>true})}});assert.equal(lib.LIB_GENDER,'all');assert.equal(lib.LIB_AGE,'all');assert.equal(lib.LIB_OUTFIT,'all');
+console.log('PASS 7 male/elder templates, '+n+' motion/view renders, male anatomy, facial hair, V1→V2 migration and combined demographics/search/favorite filters');

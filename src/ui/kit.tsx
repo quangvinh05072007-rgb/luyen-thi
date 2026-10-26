@@ -1,6 +1,7 @@
 // Bộ thành phần giao diện dùng chung.
 import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api';
+import { FeatureIcon } from './FeatureIcon';
 
 // ---------- định tuyến theo hash (#/duong-dan) ----------
 export function useRoute() {
@@ -27,6 +28,7 @@ export type Meta = {
   errorTypes: Record<string, { label: string; hint: string; action: string }>;
   types: Record<string, string>;
   aiEnabled: boolean;
+  mathOcrAvailable?: boolean;
   lanIps: string[];
   aiHint: string | null;
 };
@@ -74,6 +76,14 @@ export function Loading({ text = 'Đang tải…' }: { text?: string }) {
       <div className="spinner" /> {text}
     </div>
   );
+}
+
+export function PageHeading({ title, description, icon, level = 1 }: { title: ReactNode; description?: ReactNode; icon?: string; level?: 1 | 2 }) {
+  const Heading = level === 2 ? 'h2' : 'h1';
+  return <div className="page-heading">
+    {icon && <span className="page-heading-icon"><FeatureIcon name={icon} /></span>}
+    <div><Heading>{title}</Heading>{description && <p>{description}</p>}</div>
+  </div>;
 }
 export function ErrorBox({ error, onRetry }: { error: string; onRetry?: () => void }) {
   return (
@@ -225,14 +235,25 @@ export function Mascot({ size = 72, mood = 'happy' }: { size?: number; mood?: 'h
 
 // ---------- biểu tượng ----------
 const P: Record<string, string> = {
+  search: 'm21 21-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
+  target: 'M22 12a10 10 0 1 1-10-10M18 12a6 6 0 1 1-6-6M12 12l9-9M16 3h5v5',
+  refresh: 'M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 2M4 17l2 2a7 7 0 0 0 12-2',
+  flame: 'M13 3c1 5-4 6-2 10 2-1 3-3 3-5 4 3 6 6 4 10a7 7 0 0 1-13-2c-1-5 3-8 8-13Z',
+  math: 'm4 20 16-16v16H4ZM11 16h5v-5M5 7h5M7.5 4.5v5',
+  atom: 'M12 11v2M3 12c0-3 18-3 18 0s-18 3-18 0ZM7.5 4.2c2.6-1.5 11.6 14.1 9 15.6s-11.6-14.1-9-15.6ZM16.5 4.2c2.6 1.5-6.4 17.1-9 15.6s6.4-17.1 9-15.6Z',
+  flask: 'M9 3h6M10 3v7L4 20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1l-6-10V3M7 16h10M10 18h.01M14 13h.01',
+  leaf: 'M20 3C9 3 3 6 4 13a7 7 0 0 0 7 7c7-1 9-8 9-17ZM4 21 16 9M10 15v-5M10 15h5',
+  language: 'M3 4h12M9 2v2M5 7c1 4 4 7 8 9M13 4c-1 5-5 10-10 12M13 22l4-11 4 11M14.5 18h5',
+  bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4',
   home: 'M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
-  bank: 'M4 5h16v4H4zM4 11h16v4H4zM4 17h16v3H4z',
+  bank: 'm3 8 9-5 9 5H3ZM5 11v8M10 11v8M14 11v8M19 11v8M3 22h18',
+  table: 'M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18',
   import: 'M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3',
   exam: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6',
-  class: 'M16 11a4 4 0 1 0-8 0M3 21a9 9 0 0 1 18 0M12 7a4 4 0 1 1 0 8',
+  class: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
   report: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
   practice: 'M13 2L4 14h7l-1 8 9-12h-7z',
-  book: 'M4 4h7a3 3 0 0 1 3 3v14a2 2 0 0 0-2-2H4zM20 4h-7a3 3 0 0 0-3 3v14a2 2 0 0 1 2-2h8z',
+  book: 'M12 7v14M3 3h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5v16h-5a4 4 0 0 0-4 2 4 4 0 0 0-4-2H3V3Z',
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
   log: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
   school: 'M3 21h18M5 21V10l7-5 7 5v11M10 21v-5h4v5',
@@ -248,6 +269,7 @@ const P: Record<string, string> = {
   trophy: 'M6 9H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M18 9h3a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3M6 3h12v7a6 6 0 0 1-12 0V3zM9 21h6M12 16v5',
   chart: 'M18 20V10M12 20V4M6 20v-6',
   plus: 'M12 5v14M5 12h14',
+  gear: 'm9 3-1 3-3 1-2 3 2 2-1 3 2 3 3-1 2 3h3l1-3 3-1 2-3-2-2 1-3-2-3-3 1-2-3ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
   upload: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12',
 };
 
@@ -260,8 +282,8 @@ export function AzotaLogo({ size = 32 }: { size?: number }) {
       <path d="M28 9L15 20L17 12L28 9Z" fill="#ff7a45" opacity="0.95" />
       <defs>
         <linearGradient id="azotaGrad" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#1677ff" />
-          <stop offset="1" stopColor="#0958d9" />
+          <stop stopColor="#2443b6" />
+          <stop offset="1" stopColor="#173393" />
         </linearGradient>
       </defs>
     </svg>
@@ -269,7 +291,7 @@ export function AzotaLogo({ size = 32 }: { size?: number }) {
 }
 export function Icon({ name }: { name: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg className="ui-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
       <path d={P[name] ?? P.home} />
     </svg>
   );

@@ -298,19 +298,19 @@ export function ExamRoom({ attemptId }: { attemptId: number }) {
   const unanswered = att.items.length - answered;
 
   return (
-    <div>
+    <div className="exam-session">
       <div className="exam-top">
-        <button className="btn ghost sm" onClick={() => go('/')} aria-label="Thoát">
-          ← Thoát
+        <button className="btn ghost sm" onClick={() => go('/')} aria-label="Tạm rời bài" title="Bài đã lưu có thể mở lại để làm tiếp">
+          ← Tạm rời bài
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="strong" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 16 }}>{att.title}</div>
           <div className="tiny muted">
-            {isPractice ? 'Luyện tập cá nhân' : 'Bài thi trực tuyến'} · Đã làm {answered}/{att.items.length} câu
+            {isPractice ? 'Luyện tập cá nhân' : att.deadlineAt ? 'Bài kiểm tra có thời gian' : 'Bài được giao'} · Đã trả lời {answered}/{att.items.length} câu
           </div>
         </div>
         <span className={`save-chip ${saveState === 'offline' ? 'off' : saveState === 'saving' ? 'busy' : ''}`} role="status">
-          {saveState === 'offline' ? 'Mất mạng · đã lưu máy' : saveState === 'saving' ? 'Đang lưu…' : '● Đã lưu'}
+          {saveState === 'offline' ? 'Mất mạng · đã lưu máy' : saveState === 'saving' ? 'Đang lưu…' : 'Đã lưu'}
         </span>
         {remaining !== null && !isPractice && (
           <span className={`timer ${remaining < 5 * 60000 ? 'low' : ''}`}>
@@ -323,7 +323,7 @@ export function ExamRoom({ attemptId }: { attemptId: number }) {
       </div>
 
       <div className="exam-layout">
-        <div className="card">
+        <div className="card exam-question-panel">
           <QuestionView item={it} response={responses[it.qid]} onChange={review ? undefined : (v) => setAnswer(it.qid, v)} review={review} />
           <div className="hr" />
           <div className="row between">
@@ -352,7 +352,7 @@ export function ExamRoom({ attemptId }: { attemptId: number }) {
         </div>
         <div className="exam-side card">
           <div className="row between mb">
-            <h3 style={{ margin: 0 }}>Phiếu trả lời</h3>
+            <h3 style={{ margin: 0 }}>Danh sách câu hỏi</h3>
             <span className="badge blue">{answered}/{att.items.length} câu</span>
           </div>
           <div className="bar mb">
@@ -369,7 +369,7 @@ export function ExamRoom({ attemptId }: { attemptId: number }) {
                     const c = checks[x.qid];
                     const st = c ? (c.grade?.correct ? 'right' : (c.grade?.points ?? 0) > 0 ? 'half' : 'wrong') : isAnswered(x.type, responses[x.qid]) ? 'done' : '';
                     return (
-                      <button key={x.qid} className={`${st} ${i === cur ? 'cur' : ''} ${flags[x.qid] ? 'flag' : ''}`} onClick={() => goTo(i)} aria-label={`Câu ${x.no}`}>
+                      <button key={x.qid} className={`${st} ${i === cur ? 'cur' : ''} ${flags[x.qid] ? 'flag' : ''}`} onClick={() => goTo(i)} aria-current={i===cur?'step':undefined} aria-label={`${({mcq:'Phần I',tf:'Phần II',short:'Phần III'})[type]} · Câu ${x.no}${isAnswered(x.type,responses[x.qid])?', đã trả lời':', chưa trả lời'}${flags[x.qid]?', đánh dấu xem lại':''}`}>
                         {x.no}
                       </button>
                     );

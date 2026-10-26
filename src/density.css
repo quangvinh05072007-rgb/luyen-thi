@@ -1,0 +1,215 @@
+/* Compact density shared by all pages. Answer areas and status colors stay legible. */
+h1 { font-size: 22px; }
+h2 { font-size: 16px; }
+h3 { font-size: 14px; }
+.stack, .grid, .grid-2, .grid-3, .grid-4 { gap: 12px; }
+.card, .widget-card, .exam-widget-card, .class-tile-widget { padding: 16px; }
+.card-head { margin-bottom: 12px; gap: 10px; }
+.widget-head { margin-bottom: 12px; }
+.widget-title { font-size: 14px; }
+.btn { min-height: 36px; padding: 7px 12px; font-size: 13px; gap: 6px; }
+.btn.sm { min-height: 32px; padding: 5px 9px; font-size: 12px; }
+.btn.big { min-height: 40px; padding: 9px 16px; font-size: 14px; }
+.btn > svg { width: 16px; height: 16px; }
+.input, .select, .field > input, .field > select, .field > textarea { min-height: 36px; padding: 8px 10px; font-size: 13px; }
+textarea.input, .field > textarea { min-height: 90px; }
+.field { gap: 6px; }
+.field > label, .field > span:first-child { font-size: 12px; }
+.section-tabs { gap: 0 20px; margin-bottom: 2px; }
+.section-tabs > a, .section-tabs > button { min-height: 39px; padding: 9px 0; font-size: 13px; gap: 6px; }
+.section-tabs svg { width: 16px; height: 16px; }
+.filter-pill { min-height: 32px; padding: 5px 9px; font-size: 12px; }
+.seg button { min-height: 31px; padding: 6px 10px; font-size: 12px; }
+.badge { padding: 2px 7px; font-size: 11px; }
+.alert { padding: 9px 12px; font-size: 13px; }
+.modal { padding: 20px; }
+.modal .mb { margin-bottom: 12px; }
+.mt { margin-top: 12px; }
+.mb { margin-bottom: 12px; }
+.empty { padding: 28px 16px; }
+.loading { padding: 24px 0; font-size: 13px; }
+.page-heading { align-items: center; gap: 10px; padding: 0 0 4px; }
+.page-heading h1, .page-heading h2 { margin: 0 0 4px; font-size: 21px; line-height: 1.3; }
+.page-heading h2 { font-size: 18px; }
+.page-heading p { max-width: 85ch; font-size: 12px; line-height: 1.5; }
+.page-heading-icon { width: 36px; height: 36px; border-radius: 10px; box-shadow: none; }
+.page-heading-icon .feature-artwork { width: 28px; height: 28px; }
+.page-heading-icon::after { display: none; }
+.page-intro, .student-profile { padding: 16px; border-radius: 9px; }
+.page-intro h1, .student-profile h1 { font-size: 21px; }
+.page-intro-icon { width: 36px; height: 36px; border-radius: 10px; }
+.page-intro-icon svg { width: 22px; height: 22px; }
+.page-intro-description { margin-top: 4px; font-size: 12px; line-height: 1.5; }
+.page-intro > .row, .student-profile > .row { gap: 12px; }
+.stat-widget-grid { gap: 12px; margin-bottom: 0; }
+.stat-widget { gap: 10px; padding: 14px 16px; border-radius: 8px; }
+.stat-widget-icon { width: 34px; height: 34px; border-radius: 9px; }
+.stat-widget-icon svg { width: 19px; height: 19px; }
+.stat-widget-num, .stat .v { font-size: 22px; }
+.stat-widget-label, .stat .k { margin-top: 2px; font-size: 12px; }
+.stat { gap: 3px; }
+.launcher-grid { gap: 10px; margin-bottom: 12px; }
+.launcher-widget { min-height: 96px; gap: 7px; padding: 12px; }
+.launcher-icon { width: 34px; height: 34px; border-radius: 10px; }
+.launcher-icon svg { width: 19px; height: 19px; }
+.launcher-label { font-size: 12px; }
+.task-widget, .class-widget-card { padding: 10px 12px; gap: 10px; border-radius: 7px; }
+.task-widget-title, .exam-widget-title, .class-tile-name { font-size: 14px; }
+.exam-widget-grid, .class-tile-grid { gap: 12px; }
+.exam-widget-meta { gap: 5px; }
+.exam-widget-chip, .class-tile-chip { font-size: 11px; padding: 2px 6px; }
+.exam-widget-actions, .class-tile-actions { gap: 7px; padding-top: 8px; }
+.result-widget-card { padding: 12px 14px; gap: 12px; }
+.result-score-badge { width: 42px; height: 42px; font-size: 17px; border-radius: 9px; }
+.student-mission-widget { padding: 16px; gap: 14px; }
+.student-mission-title { font-size: 17px; margin-bottom: 4px; }
+.student-mission-badge { font-size: 11px; margin-bottom: 4px; }
+table.t th, .roster-table th { padding: 10px 12px; font-size: 12px; }
+table.t td, .roster-table td { padding: 10px 12px; font-size: 13px; }
+.card:has(> table.t) { padding: 0; }
+.card:has(> table.t) > h2 { padding: 16px 16px 8px; }
+.card:has(> table.t) > p, .card:has(> table.t) > .row { padding: 12px 16px; }
+.import-dropzone { min-height: 160px; gap: 10px; padding: 22px; border-radius: 8px; }
+.import-dropzone .strong { font-size: 14px; }
+.import-dropzone .small { font-size: 12px; line-height: 1.5; }
+.account-profile { gap: 16px; }
+.account-profile h2 { margin-bottom: 4px; font-size: 17px; }
+.account-profile p { font-size: 12px; line-height: 1.5; }
+.account-layout { gap: 14px; }
+.account-layout > form { gap: 14px; }
+.account-layout h2 { margin-bottom: 8px; }
+.account-layout .alert { font-size: 12px; line-height: 1.6; }
+.azota-result-hero { padding: 20px; border-radius: 10px; }
+.azota-result-score { font-size: 42px; margin: 10px 0 5px; }
+.azota-stat-grid { gap: 9px; margin-top: 14px; }
+.azota-stat-card { padding: 10px 8px; gap: 3px; }
+.azota-stat-val { font-size: 16px; }
+.azota-stat-lbl { font-size: 11px; }
+.login-wrap { padding: 24px 18px; }
+.login-card { padding: 22px; }
+.role-options { gap: 12px; margin: 18px 0; }
+.role-option { min-height: 128px; gap: 8px; padding: 18px 14px; }
+.role-option strong { font-size: 16px; }
+.role-symbol { width: 40px; height: 40px; border-radius: 12px; margin-bottom: 0; }
+.role-symbol svg { width: 23px; height: 23px; }
+.family-portal table th, .family-portal table td { padding: 9px 10px; }
+.family-portal > header { margin-bottom: 14px; }
+.exam-app .card { padding: 16px; }
+.exam-app .exam-top { padding-top: 10px; padding-bottom: 10px; gap: 10px; }
+.exam-app .exam-layout { gap: 14px; }
+/* Preserve readable formulas, answers, countdowns, and correctness indicators. */
+.exam-app .q-stem { font-size: 16px; }
+.exam-app .opt { min-height: 52px; }
+.workspace-app .workspace-topbar { min-height: 56px; gap: 16px; }
+.workspace-top-action { min-height: 34px; padding: 7px 10px; gap: 7px; }
+.workspace-top-action svg { width: 18px; height: 18px; }
+.workspace-topbar .account-menu summary { min-height: 38px; }
+.workspace-topbar .account-menu summary .workspace-avatar { width: 28px; height: 28px; flex-basis: 28px; font-size: 10px; }
+.workspace-account-name strong { font-size: 13px; }
+.workspace-account-name small { font-size: 11px; }
+.workspace-main:not(.class-management-main) > .workspace-content { width: calc(100% - 48px); padding: 12px 0 44px; }
+.workspace-content > .sample-banner { margin-bottom: 12px; font-size: 11px; }
+.start-welcome { min-height: 72px; padding: 16px 20px; border-radius: 11px; }
+.start-welcome h1 { margin-bottom: 5px; font-size: 16px; }
+.start-welcome p { font-size: 12px; line-height: 1.5; }
+.start-welcome::after { width: 150px; height: 150px; top: -35px; }
+.start-shortcuts { margin-top: 18px; }
+.start-shortcuts h2 { margin-bottom: 12px; font-size: 16px; }
+.start-grid { gap: 12px; }
+.start-tile { min-height: 98px; padding: 14px 12px; gap: 10px; font-size: 13px; }
+.start-tile .start-tile-icon { width: 42px; height: 42px; border-radius: 12px; }
+.start-tile-icon .feature-artwork { width: 32px; height: 32px; }
+.start-activity { padding: 16px; margin-top: 18px; }
+.start-activity h2 { font-size: 16px; }
+.start-activity-stats { gap: 14px 26px; margin: 16px 0; padding-bottom: 16px; }
+.start-activity-stats dd { font-size: 21px; margin-top: 3px; }
+.start-activity-columns { gap: 24px; }
+.start-activity-section + .start-activity-section { margin-top: 18px; }
+.start-activity-row { gap: 4px; padding: 10px 0; }
+.start-activity-row strong { font-size: 13px; }
+.start-activity-row > span { font-size: 12px; }
+.class-management-main > .workspace-content { padding-top: 16px; }
+.class-content-panel { padding: 16px; min-height: 310px; }
+.class-access-bar { min-height: 40px; padding: 5px 8px; margin-bottom: 14px; font-size: 12px; }
+.class-panel-heading { margin-bottom: 12px; }
+.class-roster-empty { min-height: 185px; gap: 12px; }
+.class-roster-empty > svg { width: 65px; height: 67px; }
+.class-content-panel .class-soft-button { padding: 8px 12px; font-size: 12px; }
+.directory-filters { padding: 12px; gap: 14px; }
+.directory-groups { gap: 12px; }
+.directory-group-toggle { margin-bottom: 10px; }
+@media (max-width: 899px) {
+  .workspace-main:not(.class-management-main) > .workspace-content { width: calc(100% - 32px); padding-top: 14px; padding-bottom: 30px; }
+  .workspace-app .workspace-topbar { min-height: 54px; gap: 10px; }
+  .workspace-topbar .account-menu summary { min-height: 40px; }
+  .workspace-topbar .account-menu summary .workspace-avatar { width: 28px; height: 28px; flex-basis: 28px; }
+  .workspace-topbar .brand-name { font-size: 15px; }
+  .page-heading h1 { font-size: 20px; }
+  .page-heading p { font-size: 12px; }
+  .page-intro h1, .student-profile h1 { font-size: 20px; }
+  .card, .widget-card, .exam-widget-card, .class-tile-widget { padding: 14px; }
+  .btn, .btn.sm, .filter-pill, .seg button { min-height: 40px; }
+  .btn.big { min-height: 42px; }
+  .input, .select, .field > input, .field > select { min-height: 40px; }
+  .section-tabs > a, .section-tabs > button { min-height: 40px; }
+  .stat-widget { padding: 12px 14px; }
+  .start-welcome { min-height: 78px; padding: 15px 16px; }
+  .start-welcome h1 { font-size: 15px; }
+  .start-welcome p { font-size: 12px; }
+  .start-tile { min-height: 104px; padding: 14px 10px; font-size: 12px; }
+  .start-tile .start-tile-icon { width: 40px; height: 40px; border-radius: 11px; }
+  .start-tile-icon .feature-artwork { width: 31px; height: 31px; }
+  .import-dropzone { min-height: 155px; padding: 18px; }
+  .role-option { min-height: 120px; padding: 16px 12px; }
+  .account-profile { gap: 14px; }
+  .start-activity-columns { grid-template-columns: 1fr; }
+  .class-content-panel { padding: 14px; }
+  .class-content-panel .class-soft-button { min-height: 40px; }
+}
+@media print {
+  .workspace-main:not(.class-management-main) > .workspace-content { width: 100%; padding: 0; }
+}
+.exam-app .short-input { font-size: 20px; min-height: 44px; }
+
+.exam-widget-card { gap: 8px; }
+
+/* One stroke family for actions, metadata and subject filters. */
+.ui-icon { flex-shrink: 0; vertical-align: -3px; }
+.tiny .ui-icon, .badge .ui-icon, .exam-widget-chip .ui-icon { width: 14px; height: 14px; vertical-align: -2px; }
+.exam-widget-chip .ui-icon { color: var(--primary); }
+.widget-title .ui-icon { margin-right: 5px; }
+.empty-icon { display: grid; place-items: center; width: 38px; height: 38px; margin: 0 auto 10px; border-radius: 11px; background: var(--primary-soft); color: var(--primary); }
+.empty-icon .ui-icon { width: 22px; height: 22px; }
+.filter-pill .ui-icon { width: 16px; height: 16px; }
+.practice-exam-row > .grow + .row { flex-wrap: wrap; justify-content: flex-end; }
+.task-widget > .grow { flex: 1; min-width: 0; }
+.practice-intro > .row > .row { flex-wrap: nowrap; }
+.practice-intro > .row > .row > div { min-width: 0; }
+.topic-card > div:first-child { width: 100%; }
+.topic-card > div:first-child .row { flex-wrap: nowrap; }
+.topic-card > .row { align-self: flex-end; }
+.task-widget > div > .ui-icon { width: 21px; height: 21px; }
+.bank-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.bank-filters > .input { width: 100%; }
+.roster-table { min-width: 800px; }
+.roster-table td { white-space: nowrap; }
+.roster-table td .row { flex-wrap: nowrap; }
+.roster-table .student-avatar-circle { flex-shrink: 0; }
+.import-dropzone:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+@media (max-width: 899px) {
+  .section-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .section-tabs > a, .section-tabs > button { flex-shrink: 0; white-space: nowrap; }
+}
+@media (min-width: 1400px) {
+  .bank-filters { grid-template-columns: minmax(180px, 1.5fr) repeat(2, minmax(120px, 1fr)) minmax(160px, 1.4fr) repeat(2, minmax(110px, 1fr)); }
+}
+@media (max-width: 599px) {
+  .selfstudy-filters > .row { gap: 6px; }
+  .selfstudy-filters .filter-pills { gap: 3px; }
+  .bank-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bank-filters > .input { min-width: 0 !important; }
+  .bank-filters > input, .bank-filters > [aria-label="Chuyên đề"] { grid-column: 1 / -1; }
+  .practice-exam-row { flex-wrap: wrap; }
+  .practice-exam-row > .grow { flex-basis: calc(100% - 60px); }
+  .practice-exam-row > .grow + .row { width: 100%; }
+}

@@ -1,5 +1,5 @@
 import { get, post } from '../../api';
-import { ErrorBox, fmtDateTime, fmtScore, Loading, useApp, useAsync } from '../../ui/kit';
+import { PageHeading, ErrorBox, fmtDateTime, fmtScore, Loading, useApp, useAsync } from '../../ui/kit';
 
 const STATUS: Record<string, string> = { open: 'Chờ xử lý', accepted: 'Đã chấp nhận', rejected: 'Đã từ chối' };
 
@@ -30,10 +30,7 @@ export function Appeals({ classId }: { classId?: number }) {
   };
   return (
     <div className="stack">
-      <div>
-        <h2>Khiếu nại điểm{classId ? ' của lớp' : ''}</h2>
-        <p className="muted small">Học sinh gửi khi xem kết quả. Mọi quyết định và điểm trước/sau đều được ghi vào nhật ký.</p>
-      </div>
+      <PageHeading level={2} title={`Khiếu nại điểm${classId ? ' của lớp' : ''}`} icon="flag" description="Học sinh gửi khi xem kết quả. Mọi quyết định và điểm trước/sau đều được ghi vào nhật ký." />
       {data.appeals.length === 0 && <div className="card empty">Chưa có khiếu nại nào.</div>}
       {data.appeals.map((a: any) => (
         <div key={a.id} className="card flat">

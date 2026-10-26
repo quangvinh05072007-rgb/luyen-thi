@@ -1,0 +1,62 @@
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const {chromium}=require('C:/Users/LEGION/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+(async()=>{
+ const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});
+ try{
+  const page=await browser.newPage({viewport:{width:1480,height:1000}}),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('file:///'+path.join(__dirname,'Kho nhan vat 2 - Rig nu v2.html').replaceAll('\\','/'));
+  assert.equal(await page.locator('.library-tabs button').count(),3,'Bộ lọc thư viện cần ba mục không bị cắt');
+  assert.equal(await page.locator('#lib [data-ck]').count(),0,'Không có ô chọn trống che nhân vật khi chưa chọn nhiều');
+  assert.equal(await page.locator('#grid .card-tags,#grid .card-status').count(),0,'Thẻ nhân vật chỉ hiện tên');
+  const originalStyle=await page.locator('#grid .card b').first().evaluate(e=>({size:getComputedStyle(e).fontSize,weight:getComputedStyle(e).fontWeight}));
+  assert.deepEqual(originalStyle,{size:'13px',weight:'600'});
+  const total=await page.locator('#grid .card').count();assert.ok(total>=14);
+  await page.locator('#q').fill('ao dai');await page.waitForTimeout(250);
+  assert.ok(await page.locator('#grid .card').count()>0,'Tìm được theo trang phục, không cần gõ dấu');
+  assert.ok(await page.locator('#grid .card').count()<total);
+  await page.locator('#q').fill('khongcothatxyz');await page.waitForTimeout(250);
+  await page.locator('[data-clear-library]').first().click();
+  assert.equal(await page.locator('#grid .card').count(),total);
+  await page.locator('#librarySelect').click();
+  assert.equal(await page.locator('#lib [data-ck]').count(),total);
+  await page.locator('#grid .card').first().click();
+  assert.equal(await page.locator('#lib [data-ck][aria-checked="true"]').count(),1);
+  await page.locator('#bDel').click();
+  assert.ok((await page.locator('#bDel').textContent()).includes('Xác nhận'));
+  await page.locator('#grid .card').nth(1).focus();
+  await page.locator('#grid .card').nth(1).press('Space');
+  assert.ok(!(await page.locator('#bDel').textContent()).includes('Xác nhận'),'Đổi lựa chọn bằng bàn phím phải đặt lại bước xác nhận xoá');
+  await page.locator('#librarySelect').click();
+  assert.equal(await page.locator('#lib [data-ck]').count(),0);
+  await page.locator('#motionTrigger').click();
+  await page.locator('#motionSearch').fill('vay tay');
+  assert.equal(await page.locator('#motionList [role="option"]').count(),1);
+  await page.locator('#motionSearch').press('Enter');
+  assert.equal(await page.evaluate(()=>window.CharacterStudioV2.config().pose),'wave');
+  assert.equal(await page.locator('#motionTrigger').getAttribute('aria-expanded'),'false');
+  await page.locator('#motionTrigger').click();
+  assert.ok(await page.locator('.motion-recent').count()>0,'Hiện động tác đã dùng gần đây');
+  await page.locator('#motionSearch').fill('khongcothatxyz');
+  assert.equal(await page.locator('#motionList [role="option"]').count(),0);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.motion-picker').count(),0);
+  await page.locator('#motionTrigger').click();
+  await page.locator('[data-motion-group="Cảm xúc"]').click();
+  assert.ok(await page.locator('#motionList [role="option"]').count()>=6);
+  await page.keyboard.press('Escape');
+  for(const size of [{width:375,height:812},{width:390,height:844},{width:844,height:390}]){
+   await page.setViewportSize(size);
+   await page.locator('#nav [data-v="lib"]').click();
+   const fit=await page.evaluate(()=>{const r=document.querySelector('.library-tabs').getBoundingClientRect();return Array.from(document.querySelectorAll('.library-tabs button')).every(e=>{const b=e.getBoundingClientRect();return b.x>=r.x&&b.right<=r.right+1;})&&document.documentElement.scrollWidth<=innerWidth;});
+   assert.ok(fit,'Các bộ lọc phải vừa chiều ngang');
+   await page.locator('#nav [data-v="prev"]').click();
+   await page.locator('#motionTrigger').click();
+   const pop=await page.locator('.motion-picker').boundingBox();
+   assert.ok(pop.x>=0&&pop.x+pop.width<=size.width+1&&pop.y>=0&&pop.y+pop.height<=size.height+1,'Bảng động tác nằm trong màn hình');
+   await page.keyboard.press('Escape');
+  }
+  assert.deepEqual(errors,[]);console.log('PASS: library search, filters, bulk selection, motion search/keyboard/history and responsive popover');
+ }finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

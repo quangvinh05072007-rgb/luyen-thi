@@ -109,6 +109,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 /** Cột thêm sau bản đầu: thêm vào CSDL cũ mà không mất dữ liệu (chạy lại nhiều lần vẫn an toàn). */
 const ADDED_COLUMNS = [
+  ['questions', 'ocr_text', 'TEXT'],
+  ['questions', 'source_stem', 'TEXT'],
   ['questions', 'group_id', 'TEXT'],
   ['attempts', 'variant_code', 'TEXT'],
   ['assignments', 'variant_mode', "TEXT NOT NULL DEFAULT 'random'"],
@@ -206,6 +208,8 @@ export function toQuestion(row) {
     id: r.id,
     type: r.type,
     stem: r.stem,
+    ocrText: r.ocr_text ?? '',
+    sourceStem: r.source_stem ?? '',
     options: r.options ?? [],
     answer: r.answer,
     explanation: r.explanation,

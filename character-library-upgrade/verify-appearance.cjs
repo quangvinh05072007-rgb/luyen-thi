@@ -1,0 +1,44 @@
+const assert=require('node:assert/strict');const path=require('node:path');
+const {chromium}=require('C:/Users/LEGION/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+(async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});try{
+ const page=await browser.newPage({viewport:{width:1480,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('file:///'+path.join(__dirname,'Kho nhan vat 2 - Rig nu v2.html').replaceAll('\\','/'));
+ const report=await page.evaluate(()=>{
+  function norm(s){return s.replace(/id="[^"]*"/g,'id=""').replace(/url\(#[^)]+\)/g,'url(#clip)');}
+  const views=['front','side','right'],styles=['normal','sparkle','round','cat','heart','sleepy','happy','black','glow','blank'];
+  const eyeCounts=views.map(view=>new Set(styles.map(eyeStyle=>norm(CharacterStudioV2.sample({pose:'stand',acc:'none',eyeStyle},{view}).svg))).size);
+  const expressions=['smile','neutral','shy','sad','creepy','grin'];
+  const expressionCounts=views.map(view=>new Set(expressions.map(expr=>norm(CharacterStudioV2.sample({pose:'stand',acc:'none',expr},{view}).svg))).size);
+  const noFlowers=views.every(view=>!CharacterStudioV2.sample({pose:'stand',acc:'none'},{view}).svg.includes('#d84a4a'));
+  return {eyeCounts,expressionCounts,noFlowers};
+ });
+ assert.deepEqual(report.eyeCounts,[10,10,10],'Mọi kiểu mắt phải có hiệu lực ở cả góc trước và hai góc nghiêng');
+ assert.deepEqual(report.expressionCounts,[6,6,6],'Biểu cảm không được trở về mặc định khi đổi góc');
+ assert.ok(report.noFlowers,'Chọn không phụ kiện không được tự thêm hoa');
+ await page.locator('#playTg').click();
+ await page.locator('[data-sec="hands"]').click();
+ await page.locator('[data-hand-choice="L"][data-value="fist"]').click();
+ await page.locator('[data-hand-choice="R"][data-value="peace"]').click();
+ const cfg=await page.evaluate(()=>CharacterStudioV2.config());assert.equal(cfg.handL,'fist');assert.equal(cfg.handR,'peace');
+ await page.locator('#armPose').selectOption('wave');
+ const arms=await page.evaluate(()=>{const a=CharacterStudioV2.sample({pose:'walk',armPose:'auto'},{time:.5}).pose,b=CharacterStudioV2.sample({pose:'walk',armPose:'wave',handR:'peace'},{time:.5}).pose;return {sameLegs:JSON.stringify(a.L.hip)===JSON.stringify(b.L.hip)&&JSON.stringify(a.R.kn)===JSON.stringify(b.R.kn),differentArms:JSON.stringify(a.R.sh)!==JSON.stringify(b.R.sh),right:b.R.hand};});
+ assert.ok(arms.sameLegs&&arms.differentArms);assert.equal(arms.right,'peace');
+ await page.locator('[data-sec="sleeves"]').click();await page.locator('[data-sleeve-choice="short"]').click();
+ assert.equal(await page.evaluate(()=>CharacterStudioV2.config().sleeveStyle),'short');
+ await page.locator('[data-tab="1"]').click();
+ for(const key of ['bottomColor','shoesColor','socksColor','accessoryColor'])assert.equal(await page.locator('[data-color-key="'+key+'"]').count(),1,'Có màu riêng cho '+key);
+ const color=page.locator('[data-color-key="shoesColor"]');await color.fill('#176752');await color.dispatchEvent('change');
+ assert.ok((await page.locator('#stage .fig').innerHTML()).includes('#176752'));
+ await page.locator('[data-color-key="bottomColor"]').fill('#377261');await page.locator('[data-color-key="bottomColor"]').dispatchEvent('change');
+ await page.locator('[data-reset-color="bottomColor"]').click();assert.equal(await page.evaluate(()=>CharacterStudioV2.config().bottomColor),undefined);
+ await page.locator('#bSave').click();await page.reload();
+ const saved=await page.evaluate(()=>CharacterStudioV2.config());assert.equal(saved.handL,'fist');assert.equal(saved.handR,'peace');assert.equal(saved.shoesColor,'#176752');assert.equal(saved.sleeveStyle,'short');
+ const advanced=await browser.newPage({viewport:{width:1480,height:1000}});await advanced.goto('file:///'+path.join(__dirname,'Kho nhan vat 2 - Rig nu v2.html').replaceAll('\\','/'));
+ await advanced.locator('[data-tab="3"]').click();await advanced.locator('[data-rig="tg"]').click();
+ await advanced.locator('[data-tab="0"]').click();await advanced.locator('[data-sec="hands"]').click();await advanced.locator('#armPose').selectOption('hips');
+ assert.equal(await advanced.locator('#playTg').isDisabled(),false,'Đổi tư thế tay nhanh phải thoát chỉnh khớp nâng cao');
+ await advanced.locator('[data-tab="3"]').click();await advanced.locator('[data-rig="tg"]').click();await advanced.locator('[data-rig-field="9"]').fill('100');
+ assert.equal(await advanced.evaluate(()=>CharacterStudioV2.sample(CharacterStudioV2.config(),{}).pose.L.sh[0]),100,'Thanh chỉnh khớp không bị lựa chọn tay nhanh che mất');
+ await advanced.close();
+ assert.deepEqual(errors,[]);console.log('PASS: consistent eyes/expressions, accessories, independent hands, sleeves, extra colors and persistence');
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -13,7 +13,7 @@ import { buildProgress } from '../shared/progress.mjs';
 import crypto from 'node:crypto';
 import { buildXlsx } from '../shared/xlsxWrite.mjs';
 import { hashSeed } from '../shared/rng.mjs';
-import { generateExam, apportion, makeVariant, makeVariants, variantLayout, assignVariants, toOriginalResponse, OFFICIAL_BLUEPRINT } from '../shared/generate.mjs';
+import { generateExam, imageOptions, apportion, makeVariant, makeVariants, variantLayout, assignVariants, toOriginalResponse, OFFICIAL_BLUEPRINT } from '../shared/generate.mjs';
 import { diagnoseAttempt, diagnoseItem, computeMastery, recommend, selectPractice } from '../shared/diagnose.mjs';
 import { examToDocx, crossAnswerKey } from '../shared/exportExam.mjs';
 import { TOPICS, TOPIC_BY_CODE, LEVELS, SOURCES, SOURCE_HINT, ERROR_TYPES, QUESTION_TYPES } from '../shared/topics.mjs';
@@ -22,6 +22,8 @@ import { seedSample } from './seed.mjs';
 import { SAMPLE_QUESTIONS } from './seedQuestions.mjs';
 import { registerReports } from './reports.mjs';
 import { registerFamily } from './family.mjs';
+import { ImportJobs } from './import-jobs.mjs';
+import { mathOcrAvailable, recognizeMathImages } from './math-ocr.mjs';
 
 export const SAVE_GRACE_MS = 30 * 1000; // ân hạn mạng sau giờ nộp
 export const LATE_WINDOW_MS = 15 * 60 * 1000; // nhận bản đồng bộ muộn (mất mạng) để giáo viên quyết định
@@ -102,8 +104,8 @@ export function createApp(config = {}) {
     return r;
   }
 
-  const VERSION_FIELDS = ['type', 'stem', 'options', 'answer', 'explanation', 'topic', 'level', 'status', 'distractors', 'group_id'];
-  const questionSnapshot = (row) => Object.fromEntries(VERSION_FIELDS.map((k) => [k, row[k] ?? null]));
+  const VERSION_FIELDS = ['type', 'stem', 'options', 'answer', 'explanation', 'topic', 'level', 'status', 'distractors', 'group_id', 'ocrText', 'sourceStem'];
+  const questionSnapshot = (row) => Object.fromEntries(VERSION_FIELDS.map((k) => [k, (k === 'ocrText' ? row.ocrText ?? row.ocr_text : k==='sourceStem'?row.sourceStem??row.source_stem:row[k]) ?? null]));
   /** Lưu trạng thái TRƯỚC khi sửa, để xem lịch sử và khôi phục. */
   function recordVersion(row, user, reason) {
     const n = (db.get('SELECT MAX(version) v FROM question_versions WHERE qid = ?', row.id)?.v ?? 0) + 1;
@@ -112,7 +114,7 @@ export function createApp(config = {}) {
   }
   function writeQuestionFields(id, f) {
     db.run(
-      'UPDATE questions SET type = ?, stem = ?, options_json = ?, answer_json = ?, explanation = ?, topic = ?, level = ?, status = ?, distractors_json = ?, group_id = ?, updated_at = ? WHERE id = ?',
+      'UPDATE questions SET type = ?, stem = ?, options_json = ?, answer_json = ?, explanation = ?, topic = ?, level = ?, status = ?, distractors_json = ?, group_id = ?, ocr_text = ?, source_stem = ?, updated_at = ? WHERE id = ?',
       f.type,
       f.stem,
       JSON.stringify(f.options ?? []),
@@ -123,6 +125,8 @@ export function createApp(config = {}) {
       f.status,
       JSON.stringify(f.distractors ?? {}),
       f.group_id ?? null,
+      String(f.ocrText ?? ''),
+      String(f.sourceStem ?? ''),
       now(),
       id,
     );
@@ -489,6 +493,7 @@ export function createApp(config = {}) {
     types: QUESTION_TYPES,
     officialBlueprint: OFFICIAL_BLUEPRINT,
     aiEnabled: ai.enabled,
+    mathOcrAvailable: mathOcrAvailable(),
     lanIps: Object.values(os.networkInterfaces()).flat().filter((a) => a && a.family === 'IPv4' && !a.internal).map((a) => a.address),
     aiHint: ai.enabled ? null : 'Chưa cấu hình khóa AI. Thêm ANTHROPIC_API_KEY vào config.local.json rồi khởi động lại.',
     serverNow: now(),
@@ -505,7 +510,7 @@ export function createApp(config = {}) {
     if (query.topic) (where.push('topic = ?'), p.push(query.topic));
     if (query.source) (where.push('source = ?'), p.push(query.source));
     if (query.level) (where.push('level = ?'), p.push(Number(query.level)));
-    if (query.q) (where.push('stem LIKE ?'), p.push(`%${query.q}%`));
+    if (query.q) (where.push('(stem LIKE ? OR ocr_text LIKE ?)'), p.push(`%${query.q}%`, `%${query.q}%`));
     const rows = db.all(`SELECT * FROM questions WHERE ${where.join(' AND ')} ORDER BY status = 'draft' DESC, updated_at DESC LIMIT 500`, ...p).map((r) => ({ ...toQuestion(r), explanationDraft: r.explanation_draft ?? null, draftCheck: r.draft_check ?? null, approvals: r.approvals ?? [] }));
     const usage = db.all('SELECT qid, COUNT(*) n, AVG(score) p FROM evidence WHERE school_id = ? GROUP BY qid', user.school_id);
     const um = Object.fromEntries(usage.map((u) => [u.qid, u]));
@@ -520,8 +525,8 @@ export function createApp(config = {}) {
   function insertQuestion(user, q, source, status = 'draft', extra = {}) {
     const t = now();
     const r = db.run(
-      `INSERT INTO questions (school_id, type, stem, options_json, answer_json, explanation, topic, level, source, status, distractors_json, origin, parent_id, tag_confidence, created_by, approved_by, created_at, updated_at, group_id)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO questions (school_id, type, stem, options_json, answer_json, explanation, topic, level, source, status, distractors_json, origin, parent_id, tag_confidence, created_by, approved_by, created_at, updated_at, group_id, ocr_text, source_stem)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       user.school_id,
       q.type,
       String(q.stem ?? ''),
@@ -541,6 +546,8 @@ export function createApp(config = {}) {
       t,
       t,
       q.group_id ? String(q.group_id).slice(0, 40) : null,
+      String(q.ocrText ?? ''),
+      String(q.sourceStem ?? ''),
     );
     return Number(r.lastInsertRowid);
   }
@@ -569,7 +576,7 @@ export function createApp(config = {}) {
     const contentChanged = VERSION_FIELDS.filter((k) => k !== 'status').some((k) => JSON.stringify(merged[k] ?? null) !== JSON.stringify(toQuestion(q)[k] ?? null));
     recordVersion(q, user, reason ?? body.versionNote ?? 'Sửa câu hỏi');
     db.run(
-      'UPDATE questions SET type = ?, stem = ?, options_json = ?, answer_json = ?, explanation = ?, topic = ?, level = ?, distractors_json = ?, group_id = ?, tag_confidence = 1, updated_at = ? WHERE id = ?',
+      'UPDATE questions SET type = ?, stem = ?, options_json = ?, answer_json = ?, explanation = ?, topic = ?, level = ?, distractors_json = ?, group_id = ?, ocr_text = ?, source_stem = ?, tag_confidence = 1, updated_at = ? WHERE id = ?',
       merged.type,
       merged.stem,
       JSON.stringify(merged.options ?? []),
@@ -579,6 +586,8 @@ export function createApp(config = {}) {
       Number(merged.level),
       JSON.stringify(merged.distractors ?? {}),
       merged.group_id ? String(merged.group_id).slice(0, 40) : null,
+      String(merged.ocrText ?? ''),
+      String(merged.sourceStem ?? ''),
       now(),
       q.id,
     );
@@ -647,23 +656,34 @@ export function createApp(config = {}) {
   });
 
   // ---- nhập đề ----
+  function storeImportedImages(user,res) {
+    const idMap={};for(const im of res.images??[])idMap[im.key]=saveImage(user,im);
+    const fix=t=>typeof t==='string'?t.replace(/\[\[img:(\w+)\]\]/g,(m,k)=>idMap[k]!==undefined?`[[img:${idMap[k]}]]`:m):t;
+    for(const q of res.questions){q.stem=fix(q.stem);q.options=(q.options??[]).map(fix);q.explanation=fix(q.explanation);q.sourceStem=fix(q.sourceStem??(q.ocrText?q.stem:''));}
+    delete res.images;return res;
+  }
+  const importJobs=new ImportJobs(db,async(job,options)=>{
+    const owner=db.get('SELECT * FROM users WHERE id=? AND school_id=? AND active=1',job.owner_id,job.school_id);
+    if(!owner||!['teacher','admin'].includes(owner.role))fail(403,'Tài khoản tạo tác vụ không còn quyền nhập đề.');
+    const result=job.meta?.engine==='marker'?await recognizeMathImages(job.input,job.meta,options):await (config.importRunner??importFile)(job.name,Buffer.from(job.input),ai,options);
+    options.signal.throwIfAborted();
+    audit(owner,'import_parse',`${job.name}: ${result.questions.length} câu (tác vụ #${job.id})`);
+    return storeImportedImages(owner,result);
+  });
+  route('POST','/api/import/jobs',STAFF,({user,raw,query})=>{if(!query.filename)fail(400,'Thiếu tên file.');return {id:importJobs.add(user,query.filename,raw)};});
+  route('GET','/api/import/jobs',STAFF,({user})=>({jobs:importJobs.list(user)}));
+  route('GET','/api/import/jobs/:id',STAFF,({user,params})=>({job:importJobs.get(user,params.id)}));
+  route('PUT','/api/import/jobs/:id/draft',STAFF,({user,params,body})=>({job:importJobs.saveDraft(user,params.id,body?.questions)}));
+  route('DELETE','/api/import/jobs/:id/draft',STAFF,({user,params})=>({job:importJobs.clearDraft(user,params.id)}));
+  route('POST','/api/import/jobs/:id/cancel',STAFF,({user,params})=>({job:importJobs.cancel(user,params.id)}));
+  route('POST','/api/import/jobs/:id/retry',STAFF,({user,params})=>({job:importJobs.retry(user,params.id)}));
   route('POST', '/api/import', STAFF, async ({ user, raw, query, body, ip }) => {
     let res;
     if (query.filename) res = await importFile(String(query.filename), raw, ai);
     else if (typeof body?.text === 'string') res = importText(body.text);
     else fail(400, 'Gửi file hoặc dán văn bản đề.');
-    // Hình trong file được lưu vào CSDL của trường; trong câu hỏi thay khóa tạm bằng mã hình thật.
-    const idMap = {};
-    for (const im of res.images ?? []) idMap[im.key] = saveImage(user, im);
-    const fix = (t) => (typeof t === 'string' ? t.replace(/\[\[img:(\w+)\]\]/g, (m, k) => (idMap[k] !== undefined ? `[[img:${idMap[k]}]]` : '[hình]')) : t);
-    for (const q of res.questions) {
-      q.stem = fix(q.stem);
-      q.options = (q.options ?? []).map(fix);
-      q.explanation = fix(q.explanation);
-    }
-    delete res.images;
-    audit(user, 'import_parse', `${query.filename ?? 'văn bản dán'}: ${res.questions.length} câu${Object.keys(idMap).length ? `, ${Object.keys(idMap).length} hình` : ''}`, ip);
-    return res;
+    audit(user, 'import_parse', `${query.filename ?? 'văn bản dán'}: ${res.questions.length} câu, ${(res.images??[]).length} hình`, ip);
+    return storeImportedImages(user,res);
   });
   function saveImage(user, im) {
     const buf = Buffer.from(im.data);
@@ -682,6 +702,21 @@ export function createApp(config = {}) {
     const r = db.get('SELECT mime, data FROM images WHERE id = ? AND school_id = ?', params.id, user.school_id);
     if (!r) fail(404, 'Không tìm thấy hình.');
     return { __file: { name: `hinh-${params.id}`, type: r.mime, data: Buffer.from(r.data), inline: true } };
+  });
+  route('POST','/api/images',STAFF,({user,raw,ip})=>{
+    if(!raw?.length||raw.length>5*1024*1024)fail(400,'Hình cần nhỏ hơn 5 MB.');
+    const mime=raw.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))?'image/png':raw[0]===255&&raw[1]===216&&raw[2]===255?'image/jpeg':raw.subarray(0,4).toString()==='RIFF'&&raw.subarray(8,12).toString()==='WEBP'?'image/webp':null;
+    if(!mime)fail(400,'Chỉ nhận hình PNG, JPG hoặc WebP hợp lệ.');
+    const id=saveImage(user,{data:raw,mime});audit(user,'image_upload',`#${id}`,ip);return {id};
+  });
+  route('POST','/api/math-ocr',STAFF,({user,body})=>{
+    if(!mathOcrAvailable())fail(503,'Bộ nhận dạng công thức chưa sẵn sàng.');
+    if(!QUESTION_TYPES[body.type])fail(400,'Chọn loại câu cần nhận dạng.');
+    const ids=[...new Set((Array.isArray(body.imageIds)?body.imageIds:[]).map(Number))];
+    if(!ids.length||ids.length>3||ids.some(id=>!Number.isInteger(id)||id<1))fail(400,'Mỗi lần nhận dạng từ 1 đến 3 ảnh gốc.');
+    const pictures=ids.map(id=>{const image=db.get('SELECT data FROM images WHERE id=? AND school_id=?',id,user.school_id);if(!image)fail(404,'Không tìm thấy hình trong trường của bạn.');return {data:Buffer.from(image.data).toString('base64')};});
+    const id=importJobs.add(user,'Nhận dạng công thức từ ảnh',Buffer.from(JSON.stringify(pictures)),{engine:'marker',type:body.type,sourceStem:ids.map(id=>`[[img:${id}]]`).join('\n')});
+    return {id};
   });
   // File đáp án rời: đọc thành bảng đáp án, rồi đối chiếu với các câu đang duyệt.
   route('POST', '/api/import/answers', STAFF, async ({ user, raw, query, body, ip }) => {
@@ -704,9 +739,16 @@ export function createApp(config = {}) {
     return { questions: out, applied, unmatched, conflicts: out.filter((q) => q.answerConflict).length };
   });
   route('POST', '/api/import/save', STAFF, ({ user, body, ip }) => {
+    const job=body.jobId?importJobs.row(user,body.jobId):null;
+    if(job&&job.state!=='completed')fail(409,'Tác vụ chưa hoàn tất.');
+    if(job?.saved_ids)return {ids:job.saved_ids};
     const qs = Array.isArray(body.questions) ? body.questions : [];
     if (!qs.length) fail(400, 'Không có câu nào để lưu.');
-    const ids = db.tx(() => qs.map((q) => insertQuestion(user, q, q.fromAi ? 'ai_modified' : 'imported', 'draft', { origin: String(body.origin ?? '').slice(0, 200) })));
+    const ids = db.tx(() => {
+      const ids=qs.map((q) => insertQuestion(user, q, q.fromAi ? 'ai_modified' : 'imported', 'draft', { origin: String(body.origin ?? '').slice(0, 200) }));
+      if(job)db.run('UPDATE import_jobs SET saved_ids_json=? WHERE id=?',JSON.stringify(ids),job.id);
+      return ids;
+    });
     audit(user, 'import_save', `${ids.length} câu từ ${body.origin ?? 'văn bản'}`, ip);
     return { ids };
   });
@@ -900,7 +942,7 @@ export function createApp(config = {}) {
     const fresh = questionsMap(user.school_id, e.items.map((x) => x.qid));
     const snapshot = {};
     for (const it of e.items) snapshot[it.qid] = fresh[it.qid] && fresh[it.qid].status === 'approved' ? fresh[it.qid] : e.snapshot[it.qid];
-    const items = e.items.map((x) => ({ ...x, group: snapshot[x.qid]?.group_id ?? x.group ?? null }));
+    const items = e.items.map((x) => ({ ...x, group: snapshot[x.qid]?.group_id ?? x.group ?? null, fixedOptions: imageOptions(snapshot[x.qid]) }));
     const variants = makeVariants(items, e.variants.length, `${user.id}-${now()}`);
     const title = String(body.title ?? '').trim() || `${e.title} (bản sao)`;
     const id = Number(
@@ -922,7 +964,7 @@ export function createApp(config = {}) {
       if (!q) fail(400, `Câu #${it.qid} không có trong ngân hàng của trường.`);
       if (q.status !== 'approved') fail(400, `Câu #${it.qid} chưa được duyệt. Chỉ câu đã duyệt mới vào đề.`);
     }
-    const norm = items.map((x) => ({ qid: Number(x.qid), type: qmap[x.qid].type, topic: qmap[x.qid].topic, level: qmap[x.qid].level, group: qmap[x.qid].group_id ?? null }));
+    const norm = items.map((x) => ({ qid: Number(x.qid), type: qmap[x.qid].type, topic: qmap[x.qid].topic, level: qmap[x.qid].level, group: qmap[x.qid].group_id ?? null, fixedOptions: imageOptions(qmap[x.qid]) }));
     const variants = makeVariants(norm, Number(body.variants) || 4, body.seed ?? `${user.id}-${now()}`);
     const r = db.run(
       'INSERT INTO exams (school_id, title, blueprint_json, items_json, duration_min, variants_json, snapshot_json, created_by, created_at, visibility, dept) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
@@ -1143,7 +1185,7 @@ export function createApp(config = {}) {
     const res = generateExam(pool, { counts, levels: { 1: 40, 2: 40, 3: 20 }, topics: [topic], avoidIds: done, seed: `${user.id}-${now()}` });
     if (!res.items.length) fail(400, 'Không chọn được câu nào cho phiếu luyện.');
     const qmap = questionsMap(user.school_id, res.items.map((x) => x.qid));
-    const items = res.items.map((x) => ({ qid: x.qid, type: x.type, topic: x.topic, level: x.level, group: qmap[x.qid].group_id ?? null }));
+    const items = res.items.map((x) => ({ qid: x.qid, type: x.type, topic: x.topic, level: x.level, group: qmap[x.qid].group_id ?? null, fixedOptions: imageOptions(qmap[x.qid]) }));
     const title = String(body.title ?? '').trim() || `Phiếu luyện: ${TOPIC_BY_CODE[topic].name}`;
     const variants = makeVariants(items, 1, `${user.id}-${now()}`);
     const closeAt = now() + Math.min(30, Math.max(1, Number(body.days) || 7)) * 86400000;
@@ -1940,7 +1982,7 @@ export function createApp(config = {}) {
     let picked = selectPractice({ pool, topics, mastery, history: hist, due, count, seed: `${user.id}-${now()}`, now: now() });
     if (mode === 'review') picked = pool.filter((q) => due.has(q.id)).slice(0, count);
     if (!picked.length) fail(400, 'Ngân hàng chưa có câu đã duyệt cho chuyên đề này. Báo giáo viên bổ sung.');
-    const layout = makeVariant(picked.map((q) => ({ qid: q.id, type: q.type })), `p-${user.id}-${now()}`);
+    const layout = makeVariant(picked.map((q) => ({ qid: q.id, type: q.type, fixedOptions: imageOptions(q) })), `p-${user.id}-${now()}`);
     const r = db.run('INSERT INTO attempts (school_id, student_id, kind, title, layout_json, started_at) VALUES (?,?,?,?,?,?)', user.school_id, user.id, 'practice', title, JSON.stringify(layout), now());
     audit(user, 'practice_start', `${mode}: ${topics.join(',')}`, ip);
     return attemptView(getAttempt(Number(r.lastInsertRowid)));
@@ -2309,6 +2351,7 @@ export function createApp(config = {}) {
     ai,
     now,
     backupNow,
+    importJobs,
     materializeDueReports: reports.materializeDueReports,
     internals: {
       finalize,

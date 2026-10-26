@@ -16,7 +16,7 @@ export function QuestionView({ item, response, onChange, review, compact }: { it
           <span className="badge blue">
             {PART[item.type]} · Câu {item.no}
           </span>
-          <span>{{ mcq: 'Chọn một phương án', tf: 'Chọn Đúng hoặc Sai cho từng ý', short: 'Ghi kết quả (tối đa 4 ký tự, dùng dấu phẩy thập phân)' }[item.type]}</span>
+          <span>{{ mcq: 'Chọn một phương án', tf: 'Chọn Đúng hoặc Sai cho từng ý', short: 'Nhập kết quả, dùng dấu phẩy cho số thập phân' }[item.type]}</span>
         </div>
       )}
       <MathText as="div" className="q-stem mb" text={item.stem} />

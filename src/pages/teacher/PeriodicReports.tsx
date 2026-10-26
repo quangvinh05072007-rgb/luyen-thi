@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { api, download, get, post } from '../../api';
-import { Bar, ErrorBox, fmtDateTime, fmtScore, Loading, pct, useApp, useAsync } from '../../ui/kit';
+import { PageHeading, Bar, ErrorBox, fmtDateTime, fmtScore, Loading, pct, useApp, useAsync } from '../../ui/kit';
 
 type Metrics = { assignments: number; students: number; eligibleStudents: number; participants: number; participation: number | null; submissions: number; scoreSamples: number; averageScore: number | null };
 type ClassMetrics = Metrics & { classId: number; className: string };
@@ -44,10 +44,7 @@ export function PeriodicReports({ classId }: { classId?: number }) {
     await download(savedId ? `/api/reports/snapshots/${savedId}/export.xlsx` : `/api/reports/period/export.xlsx?${query}`, 'bao-cao.xlsx');
   }
   return <div className="stack">
-    <div>
-      <h2>Báo cáo định kỳ{classId ? ' của lớp' : ''}</h2>
-      <p className="muted">Theo dõi mức tham gia và kết quả {classId ? 'lớp đang mở' : user.role === 'admin' ? 'trong trường' : 'các lớp phụ trách'}, so sánh với kỳ trước có cùng số ngày.</p>
-    </div>
+    <PageHeading level={classId ? 2 : 1} title={`Báo cáo định kỳ${classId ? ' của lớp' : ''}`} icon="chart" description={<>Theo dõi mức tham gia và kết quả {classId ? 'lớp đang mở' : user.role === 'admin' ? 'trong trường' : 'các lớp phụ trách'}, so sánh với kỳ trước có cùng số ngày.</>} />
     <form className="card stack" onSubmit={submit}>
       <div className="grid-2">
         <div className="field"><label htmlFor="report-from">Từ ngày (giờ Việt Nam)</label><input id="report-from" type="date" min="2000-01-01" max="2100-12-31" required value={from} onChange={(e) => setFrom(e.target.value)} /></div>
@@ -84,7 +81,7 @@ export function PeriodicReports({ classId }: { classId?: number }) {
       <div className="card stack">
         <h2>So sánh lớp</h2>
         {!report.summary.assignments && <p className="muted">Không có bài giao liên quan trong khoảng ngày đã chọn. Đổi ngày để xem một kỳ khác.</p>}
-        {report.classes.length > 0 && <div className="table-wrap"><table>
+        {report.classes.length > 0 && <div className="table-wrap"><table className="t">
           <caption className="small muted" style={{ textAlign: 'left', marginBottom: 12 }}>Cùng cách tính cho mọi lớp. Dấu — nghĩa là chưa có mẫu.</caption>
           <thead><tr><th scope="col">Lớp</th><th scope="col">Bài giao</th><th scope="col">HS tham gia</th><th scope="col">Tỷ lệ</th><th scope="col">Bài nộp</th><th scope="col">Mẫu điểm</th><th scope="col">Điểm TB</th><th scope="col">Thay đổi điểm</th></tr></thead>
           <tbody>{report.classes.map((c) => {

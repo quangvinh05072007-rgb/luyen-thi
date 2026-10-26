@@ -1,0 +1,92 @@
+/* Compact navigation through importing, publishing and taking an exam. */
+.catalog-summary { display: flex; flex-wrap: wrap; gap: 12px 28px; padding: 2px 0; }
+.catalog-summary .stat-widget { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; gap: 9px; }
+.catalog-summary .stat-widget-icon { width: 30px; height: 30px; border-radius: 9px; }
+.catalog-summary .stat-widget-icon .ui-icon { width: 17px; height: 17px; }
+.catalog-summary .stat-widget-info { flex-direction: row; align-items: baseline; gap: 6px; }
+.catalog-summary .stat-widget-num { font-size: 18px; line-height: 1.4; }
+.catalog-summary .stat-widget-label { font-size: 12px; }
+.import-steps { display: flex; list-style: none; padding: 0; margin: 0; gap: 24px; }
+.import-steps li { display: flex; align-items: center; gap: 8px; color: var(--ink-3); font-size: 12px; }
+.import-steps li > span { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 50%; font-size: 11px; background: white; }
+.import-steps li.current { color: var(--primary); font-weight: 600; }
+.import-steps li.current > span { background: var(--primary); color: white; border-color: var(--primary); }
+.import-steps li.complete > span { background: var(--primary-soft); color: var(--primary); border-color: transparent; }
+.import-steps .ui-icon { width: 14px; height: 14px; }
+.import-next { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 8px; background: var(--primary-soft); color: var(--ink-2); }
+.import-next .ui-icon { width: 16px; height: 16px; }
+.import-notes, .import-question-notes { margin-top: 8px; font-size: 12px; color: var(--ink-3); }
+.import-notes > summary, .import-question-notes > summary { cursor: pointer; padding: 5px 0; }
+.exam-sharing > summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; font-size: 13px; }
+.exam-sharing > summary > span:first-child { display: inline-flex; align-items: center; gap: 8px; }
+.exam-sharing > summary > span:first-child::after { content: '⌄'; color: var(--ink-3); margin-left: 4px; }
+.exam-sharing[open] > summary > span:first-child::after { content: '⌃'; }
+.exam-sharing > summary .ui-icon { width: 17px; height: 17px; color: var(--primary); }
+.exam-preview-options { margin-top: 8px; font-size: 12px; }
+.exam-preview-options > summary { cursor: pointer; color: var(--primary); padding: 4px 0; }
+.rich-field { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: white; min-width: 0; }
+.rich-field:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+.rich-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; padding: 4px 6px; border-bottom: 1px solid var(--line); background: #f8faff; }
+.rich-toolbar button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; border-radius: 5px; padding: 5px 7px; color: var(--ink-2); cursor: pointer; font-size: 11px; min-height: 28px; }
+.rich-toolbar button:hover, .rich-toolbar button[aria-pressed=true] { background: var(--primary-soft); color: var(--primary); }
+.rich-toolbar button:disabled { opacity: .4; cursor: default; }
+.rich-toolbar .ui-icon { width: 14px; height: 14px; }
+.rich-field .tiptap { padding: 10px 12px; min-height: 90px; outline: none; line-height: 1.7; font-size: 14px; overflow-wrap: anywhere; }
+.rich-field.compact .tiptap { min-height: 40px; padding: 6px 10px; }
+.rich-field.compact .rich-toolbar { display: none; }
+.rich-field.compact:focus-within .rich-toolbar { display: flex; }
+.rich-field .tiptap p { margin: 0; min-height: 1.6em; }
+.rich-field .tiptap img { max-width: 100%; height: auto; }
+.rich-field .tiptap table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+.rich-field .tiptap td, .rich-field .tiptap th { border: 1px solid #c4cddd; padding: 5px 8px; min-width: 40px; position: relative; }
+.rich-field .tiptap .selectedCell { background: var(--primary-soft); }
+.rich-field .tiptap .tiptap-mathematics-render { cursor: pointer; padding: 1px 3px; border-radius: 4px; }
+.rich-field .tiptap .tiptap-mathematics-render:hover { background: var(--primary-soft); }
+.rich-source { border: 0; border-radius: 0; min-height: 100px; font-family: Consolas, monospace; }
+.formula-dialog math-field { display: block; width: 100%; min-height: 64px; font-size: 24px; border: 1px solid var(--line); border-radius: 9px; padding: 10px; }
+.question-editor, .question-edit-content { min-width: 0; }
+.question-source { border: 1px solid var(--line); border-radius: 9px; padding: 12px; background: #f7f9fd; margin-bottom: 14px; }
+.question-source h3 { font-size: 13px; margin-bottom: 10px; }
+.question-source img { width: 100%; height: auto; }
+.question-source .btn { width: 100%; }
+.import-jobs { max-height: 300px; overflow: auto; }
+.import-jobs h3 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; }
+.import-jobs h3 .ui-icon { width: 16px; height: 16px; color: var(--primary); }
+.import-job { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); margin-top: 8px; }
+.import-job > .grow { min-width: 0; }
+.import-job b { overflow-wrap: anywhere; }
+.import-job-error { margin: 3px 0 0; color: var(--bad); }
+.import-job progress { width: 180px; max-width: 100%; height: 5px; accent-color: var(--primary); }
+.math-ocr-preview { max-height: 45vh; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; line-height: 1.7; }
+@media (min-width: 1100px) {
+  .question-editor.has-source { display: grid; grid-template-columns: minmax(200px,.8fr) minmax(0,1.4fr); align-items: start; gap: 18px; }
+  .question-source { position: sticky; top: 16px; max-height: 75vh; overflow: auto; }
+}
+.exam-app .exam-session .exam-top { gap: 12px; margin-bottom: 18px; }
+.exam-session .save-chip { white-space: nowrap; font-size: 11px; padding: 4px 9px; }
+.exam-session .timer { border-radius: 8px; padding: 5px 10px; font-size: 16px; box-shadow: none; }
+.exam-session .exam-layout { grid-template-columns: minmax(0, 1fr); }
+.exam-session .exam-question-panel { min-width: 0; padding: 20px; }
+.exam-session .opt, .exam-session .opt .letter, .exam-session .palette button, .exam-session .tf-btns button { transition: border-color .15s, background-color .15s, color .15s; }
+.exam-session .opt:hover, .exam-session .opt:active, .exam-session .opt.on, .exam-session .opt:hover .letter, .exam-session .opt.on .letter, .exam-session .palette button:hover, .exam-session .palette button:active, .exam-session .tf-btns button:hover { transform: none; }
+.exam-session .opt.on, .exam-session .palette button { box-shadow: none; }
+.exam-session .palette { gap: 7px; }
+.exam-session .palette button { height: 36px; border-radius: 7px; }
+.exam-session .palette button.done { background: var(--primary); border-color: var(--primary); }
+.exam-session .palette button.cur { outline-width: 2px; }
+@media (min-width: 1000px) {
+  .exam-session .exam-layout { grid-template-columns: minmax(0, 1fr) 260px; }
+}
+@media (max-width: 599px) {
+  .catalog-summary { gap: 12px 18px; }
+  .catalog-summary .stat-widget-info { flex-direction: column; gap: 0; }
+  .catalog-summary .stat-widget-icon { display: none; }
+  .import-steps { gap: 10px; justify-content: space-between; }
+  .import-steps li { gap: 5px; font-size: 11px; }
+  .import-steps li > span { flex-shrink: 0; width: 22px; height: 22px; }
+  .exam-app .exam-session .exam-top { gap: 8px; }
+  .exam-session .exam-top > div { flex-basis: calc(100% - 120px) !important; }
+  .exam-session .save-chip { margin-right: auto; }
+  .exam-session .exam-question-panel { padding: 14px; }
+  .exam-session .palette button { height: 40px; }
+}

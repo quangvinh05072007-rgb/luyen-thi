@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { post } from '../api';
-import { Mascot, User } from '../ui/kit';
+import { AzotaLogo, User } from '../ui/kit';
 
 export function Setup({ onDone }: { onDone: (u: User) => void }) {
   const [schoolName, setSchool] = useState('');
@@ -33,7 +33,7 @@ export function Setup({ onDone }: { onDone: (u: User) => void }) {
     <div className="login-wrap">
       <div className="login-card" style={{ maxWidth: 520 }}>
         <div className="center mb">
-          <Mascot size={90} mood="cheer" />
+          <AzotaLogo size={54} />
           <h1 style={{ marginTop: 8 }}>Chào mừng đến SmartExam AI</h1>
           <p className="muted">Thiết lập lần đầu. Chỉ làm một lần.</p>
         </div>

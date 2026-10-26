@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { get, post } from '../../api';
-import { Bar, ErrorBox, fmtDateTime, fmtScore, go, Icon, Loading, Mascot, scoreColor, useApp, useAsync } from '../../ui/kit';
+import { Bar, ErrorBox, fmtDateTime, fmtScore, go, Icon, Loading, scoreColor, useApp, useAsync } from '../../ui/kit';
 
 export function StudentHome() {
   const { user, toast } = useApp();
@@ -39,48 +39,20 @@ export function StudentHome() {
 
   return (
     <div className="stack">
-      {/* Widget 1: Profile & Daily Status Header */}
-      <div className="widget-card row between" style={{ alignItems: 'center' }}>
+      <header className="widget-card student-profile row between">
         <div className="row" style={{ gap: 14 }}>
-          <Mascot size={52} mood={goalPct >= 1 ? 'cheer' : 'happy'} />
-          <div>
-            <h1 style={{ margin: 0, fontSize: 22 }}>
-              Chào <span className="gradient-text">{user.displayName.split(' ').slice(-1)[0]}</span>!
-            </h1>
-            <div className="row tiny muted" style={{ marginTop: 2, gap: 8 }}>
-              <span>Lớp {user.class?.name ?? 'học sinh'}</span>
-              <span>·</span>
-              <span>{user.school.name}</span>
-            </div>
-          </div>
+          <span className="page-intro-icon"><Icon name="user" /></span>
+          <div><h1>Chào {user.displayName.split(' ').slice(-1)[0]}!</h1><p className="page-intro-description">Lớp {user.class?.name ?? 'học sinh'} · {user.school.name}</p></div>
         </div>
         <div className="row" style={{ gap: 12 }}>
-          <span className="streak">🔥 {data.streak} ngày</span>
-          <span
-            className="badge"
-            style={{
-              fontSize: 13,
-              padding: '4px 12px',
-              background: 'linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%)',
-              borderColor: '#d3adf7',
-              color: '#531dab',
-              fontWeight: 800,
-              boxShadow: '0 2px 8px rgba(114, 46, 209, 0.15)',
-            }}
-          >
-            ⚡ {data.xp} XP
-          </span>
-          <div style={{ minWidth: 120 }}>
-            <div className="row between tiny muted mb" style={{ marginBottom: 3 }}>
-              <span>Mục tiêu ngày</span>
-              <b>{data.today.questions}/{data.today.goal} câu</b>
-            </div>
-            <div className="bar" style={{ height: 6 }}>
-              <span style={{ width: `${goalPct * 100}%`, background: goalPct >= 1 ? 'var(--good)' : 'var(--primary)' }} />
-            </div>
+          <span className="streak"><Icon name="clock" />{data.streak} ngày</span>
+          <span className="student-xp"><Icon name="practice" />{data.xp} XP</span>
+          <div style={{ minWidth: 140 }}>
+            <div className="row between tiny muted" style={{ marginBottom: 5 }}><span>Mục tiêu ngày</span><b>{data.today.questions}/{data.today.goal} câu</b></div>
+            <div className="bar"><span style={{ width: `${goalPct * 100}%`, background: goalPct >= 1 ? 'var(--good)' : 'var(--primary)' }} /></div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Widget 2: Nhiệm vụ chính (Hero Mission Widget) */}
       {next ? (
@@ -129,7 +101,7 @@ export function StudentHome() {
           {/* Widget Sổ lỗi sai */}
           <div className="widget-card">
             <div className="widget-head">
-              <h2 className="widget-title"><Icon name="star" /> Sổ lỗi sai</h2>
+              <h2 className="widget-title"><Icon name="star" /> Câu cần ôn</h2>
               <span className={`badge ${data.review.due > 0 ? 'amber' : 'green'}`}>
                 {data.review.due > 0 ? `${data.review.due} câu đến hạn` : 'Đã sạch'}
               </span>

@@ -1,8 +1,9 @@
+import { filterExamCatalog } from '../../../shared/exam-catalog.mjs';
 import { useState } from 'react';
 import { download, get, post } from '../../api';
 import { MathText } from '../../ui/MathText';
 import { Comments } from '../../ui/Comments';
-import { shareUrl, ErrorBox, fmtDate, go, LevelBadge, Loading, topicName, useApp, useAsync, useRoute } from '../../ui/kit';
+import { PageHeading, shareUrl, ErrorBox, fmtDate, go, LevelBadge, Icon, Loading, topicName, useApp, useAsync, useRoute } from '../../ui/kit';
 
 export function Exams() {
   const { query } = useRoute();
@@ -11,29 +12,23 @@ export function Exams() {
   const [scope, setScope] = useState('all');
   const [search, setSearch] = useState('');
   const [dept, setDept] = useState('');
-  const { data, error, loading, reload } = useAsync(() => get(`/api/exams?scope=${scope}`), [scope]);
+  const { data, error, loading, reload } = useAsync(() => get('/api/exams'), []);
   const allExams = data?.exams ?? [];
-  const exams = allExams.filter(
-    (e: any) =>
-      (!dept || e.dept === dept) &&
-      `${e.title} ${e.author}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))
-  );
+  const exams = filterExamCatalog(allExams,{scope,search,dept});
   const myCount = allExams.filter((e: any) => e.mine).length;
   const sharedCount = allExams.filter((e: any) => e.visibility === 'school').length;
 
   return (
     <div className="stack">
       <div className="row between">
-        <h1 style={{ margin: 0 }}>Đề thi</h1>
-        <a className="btn primary" href={`#/ra-de${suffix}`}>
-          + Ra đề mới
-        </a>
+        <PageHeading title="Kho đề" description="Đề đã lưu để giao cho lớp, luyện tập hoặc xuất Word." icon="exam" />
+        <div className="row"><a className="btn" href={`#/nhap-de${suffix}`}><Icon name="upload" />Nhập đề từ file</a><a className="btn primary" href={`#/ra-de${suffix}`}><Icon name="plus" />Tạo đề mới</a></div>
       </div>
 
-      <div className="stat-widget-grid">
+      <div className="catalog-summary">
         <div className="stat-widget">
           <div className="stat-widget-icon blue">
-            <span style={{ fontSize: 20 }}>📝</span>
+            <Icon name="exam" />
           </div>
           <div className="stat-widget-info">
             <span className="stat-widget-num">{allExams.length}</span>
@@ -42,7 +37,7 @@ export function Exams() {
         </div>
         <div className="stat-widget">
           <div className="stat-widget-icon green">
-            <span style={{ fontSize: 20 }}>👤</span>
+            <Icon name="user" />
           </div>
           <div className="stat-widget-info">
             <span className="stat-widget-num">{myCount}</span>
@@ -51,7 +46,7 @@ export function Exams() {
         </div>
         <div className="stat-widget">
           <div className="stat-widget-icon purple">
-            <span style={{ fontSize: 20 }}>🏫</span>
+            <Icon name="school" />
           </div>
           <div className="stat-widget-info">
             <span className="stat-widget-num">{sharedCount}</span>
@@ -83,12 +78,12 @@ export function Exams() {
             <input
               className="input grow"
               type="search"
-              placeholder="Tìm tên đề hoặc giáo viên…"
+              aria-label="Tìm trong kho đề" placeholder="Tìm tên đề hoặc giáo viên…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
             {data && (
-              <select className="input" value={dept} onChange={(e) => setDept(e.target.value)} style={{ width: 'auto' }}>
+              <select className="input" aria-label="Tổ chuyên môn" value={dept} onChange={(e) => setDept(e.target.value)} style={{ width: 'auto' }}>
                 <option value="">Tất cả tổ</option>
                 {[...new Set<string>((data?.exams ?? []).map((e: any) => e.dept).filter(Boolean))].map((d) => (
                   <option key={d} value={d}>
@@ -112,16 +107,16 @@ export function Exams() {
           {exams.map((e: any) => {
             const totalQ = (e.counts?.mcq ?? 0) + (e.counts?.tf ?? 0) + (e.counts?.short ?? 0);
             const dept = e.dept || 'Toán';
-            const icon = dept === 'Vật lí' ? '⚡' : dept === 'Hóa học' ? '🧪' : dept === 'Sinh học' ? '🧬' : dept === 'Tiếng Anh' ? '🇬🇧' : '📐';
-            const tagBg = dept === 'Vật lí' ? '#faf5ff' : dept === 'Hóa học' ? '#f0fdfa' : dept === 'Sinh học' ? '#f0fdf4' : dept === 'Tiếng Anh' ? '#fdf2f8' : '#eff6ff';
-            const tagColor = dept === 'Vật lí' ? '#7e22ce' : dept === 'Hóa học' ? '#0f766e' : dept === 'Sinh học' ? '#15803d' : dept === 'Tiếng Anh' ? '#be185d' : '#1d4ed8';
+            const icon = dept === 'Vật lí' ? 'practice' : dept === 'Hóa học' ? 'bank' : dept === 'Sinh học' ? 'book' : dept === 'Tiếng Anh' ? 'book' : 'edit';
+            const tagBg = 'var(--primary-soft)';
+            const tagColor = 'var(--primary)';
 
             return (
               <div
                 key={e.id}
                 className="exam-widget-card"
                 style={{
-                  borderRadius: 16,
+                  borderRadius: 9,
                   border: '1px solid #e2e8f0',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                   display: 'flex',
@@ -144,7 +139,7 @@ export function Exams() {
                         flexShrink: 0,
                       }}
                     >
-                      {icon}
+                      <Icon name={icon} />
                     </span>
                     <span
                       style={{
@@ -180,8 +175,8 @@ export function Exams() {
 
                 <h3
                   style={{
-                    margin: '10px 0 6px',
-                    fontSize: 15,
+                    margin: '2px 0',
+                    fontSize: 14,
                     fontWeight: 700,
                     color: '#0f172a',
                     lineHeight: 1.4,
@@ -190,19 +185,19 @@ export function Exams() {
                   {e.title}
                 </h3>
 
-                <div className="exam-widget-meta" style={{ marginTop: 'auto', paddingTop: 8 }}>
-                  <span className="exam-widget-chip">⏱️ {e.durationMin} phút</span>
-                  <span className="exam-widget-chip">📝 {totalQ} câu</span>
-                  <span className="exam-widget-chip">👤 {e.author}</span>
-                  {e.uses ? <span className="exam-widget-chip">🔄 {e.uses} lượt</span> : null}
+                <div className="exam-widget-meta" style={{ marginTop: 'auto', paddingTop: 2 }}>
+                  <span className="exam-widget-chip"><Icon name="clock" /> {e.durationMin} phút</span>
+                  <span className="exam-widget-chip"><Icon name="exam" /> {totalQ} câu</span>
+                  <span className="exam-widget-chip"><Icon name="user" /> {e.author}</span>
+                  {e.uses ? <span className="exam-widget-chip"><Icon name="refresh" /> {e.uses} lượt</span> : null}
                 </div>
 
                 <div
                   className="row"
                   style={{
                     gap: 8,
-                    marginTop: 12,
-                    paddingTop: 10,
+                    marginTop: 4,
+                    paddingTop: 8,
                     borderTop: '1px solid #f1f5f9',
                   }}
                 >
@@ -211,7 +206,7 @@ export function Exams() {
                     href={`#/de-thi/${e.id}${suffix}`}
                     style={{ fontWeight: 700, textAlign: 'center' }}
                   >
-                    ⚡ Giao đề ngay
+                    <Icon name="plane" /> Giao bài cho lớp
                   </a>
                   <a
                     className="btn sm ghost"
@@ -283,8 +278,9 @@ export function ExamDetail({ id }: { id: number }) {
           {exam.items.length} câu · {exam.durationMin} phút · mã đề {exam.variants.join(', ')}
         </div>
       </div>
-      <section className="card stack">
-        <div className="row between"><h2>Chia sẻ trong trường</h2><span className={`badge ${exam.visibility === 'school' ? 'blue' : ''}`}>{exam.visibility === 'school' ? 'Đang dùng chung' : 'Đề riêng tư'}</span></div>
+      <details className="card exam-sharing">
+        <summary><span><Icon name="school" />Chia sẻ & đánh giá</span><span className={`badge ${exam.visibility === 'school' ? 'blue' : ''}`}>{exam.visibility === 'school' ? 'Đang dùng chung' : 'Đề riêng tư'}</span></summary>
+        <div className="stack mt">
         <p className="small muted">{exam.author} · {exam.ratingCount ? `${exam.ratingAvg}/5 từ ${exam.ratingCount} đánh giá` : 'Chưa có đánh giá'}</p>
         {(exam.mine || user.role === 'admin') && <>
           <label className="field">Tổ chuyên môn<input className="input" maxLength={80} value={deptDraft ?? exam.dept ?? ''} onChange={e => setDeptDraft(e.target.value)} placeholder="Ví dụ: Tổ Toán" /></label>
@@ -294,9 +290,10 @@ export function ExamDetail({ id }: { id: number }) {
           <p className="tiny muted">Đề dùng chung cho phép giáo viên trong trường xem, xuất, nhân bản và giao cho lớp mình.</p>
         </>}
         {!exam.mine && exam.visibility === 'school' && <div className="row"><label className="field">Đánh giá của bạn<select className="input" value={rating ?? exam.myRating ?? ''} onChange={e => setRating(Number(e.target.value))}><option value="" disabled>Chọn số sao</option>{[1,2,3,4,5].map(n => <option key={n} value={n}>{n}/5 sao</option>)}</select></label><button className="btn" disabled={sharing || !(rating ?? exam.myRating)} onClick={async () => { setSharing(true); try { await post(`/api/exams/${id}/rate`, { stars: rating ?? exam.myRating }); toast('Đã lưu đánh giá.'); reload(); } catch (e: any) { toast(e.message); } finally { setSharing(false); } }}>Lưu đánh giá</button></div>}
-      </section>
+        </div>
+      </details>
       <div className="card stack">
-        <h2>Giao đề</h2>
+        <div className="row between"><h2>Giao bài cho lớp</h2><span className="tiny muted">Chọn lớp, lịch làm bài và cách công bố điểm</span></div>
         <div className="field">
           <label>Lớp</label>
           <div className="row">
@@ -344,7 +341,7 @@ export function ExamDetail({ id }: { id: number }) {
             <option value="after_close">Sau khi đóng bài (chống lộ đáp án)</option>
           </select>
         </div>
-        <p className="tiny muted">Đồng hồ do máy chủ giữ; hết giờ máy chủ tự nộp bản lưu cuối. Học sinh vào địa chỉ <b>{shareUrl(meta)}</b> (cùng mạng với máy này).</p>
+        <p className="tiny muted">Học sinh đăng nhập tại <b>{shareUrl(meta)}</b>, mở <b>Lớp học → Làm bài</b>. Bài kiểm tra có thời gian được tự nộp khi hết giờ.</p>
         <div>
           <button className="btn primary big" disabled={busy || !selectedClasses.length || (variantMode === 'list' && (roster.loading || !!roster.error))} onClick={assign}>
             Giao cho {selectedClasses.length || '…'} lớp
@@ -355,7 +352,7 @@ export function ExamDetail({ id }: { id: number }) {
         <div className="card-head">
           <h2>Xuất Word</h2>
         </div>
-        <p className="small muted">Mọi mã đề kèm bảng đáp án; công thức là Equation thật của Word (sửa được), không phải ảnh.</p>
+        <p className="small muted">Các mã đề kèm bảng đáp án. Công thức LaTeX xuất thành Equation có thể sửa; hình và công thức trong câu scan giữ dạng ảnh gốc.</p>
         <div className="row">
           <button className="btn" onClick={() => exportDocx(false)}>
             Tải đề + đáp án (.docx)
@@ -381,6 +378,7 @@ export function ExamDetail({ id }: { id: number }) {
       <div className="card"><Comments kind="exam" id={id} /></div>
       <div className="card">
         <h2>Nội dung đề</h2>
+        <p className="tiny muted">Câu hỏi gốc trước khi trộn mã đề. Mở từng câu để kiểm tra phương án và đáp án.</p>
         {exam.items.map((it: any, i: number) => {
           const q = data.questions[it.qid];
           return (
@@ -392,6 +390,11 @@ export function ExamDetail({ id }: { id: number }) {
                   <LevelBadge level={q.level} />
                   <span className="muted">{topicName(meta, q.topic)}</span>
                 </div>
+                <details className="exam-preview-options">
+                  <summary>Phương án & đáp án</summary>
+                  {q.type !== 'short' && <div className="grid-2 small mt">{q.options.map((option: string,k: number)=><div key={k}><b>{q.type==='mcq'?'ABCD'[k]+'.':'abcd'[k]+')'}</b> <MathText text={option}/></div>)}</div>}
+                  <div className="small mt"><b>Đáp án: </b>{q.type==='mcq'?'ABCD'[q.answer]:q.type==='tf'?q.answer.map((v: boolean,k: number)=>`${'abcd'[k]}) ${v?'Đúng':'Sai'}`).join(' · '):String(q.answer ?? '—')}</div>
+                </details>
               </div>
             </div>
           );
