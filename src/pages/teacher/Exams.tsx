@@ -28,37 +28,37 @@ export function Exams() {
         <div className="row">{meta.omrAvailable && (<button className="btn ghost" type="button" onClick={() => setOmrExam(allExams[0] || { id: 0, title: 'Phiếu trắc nghiệm' })}><Icon name="scan" /> Chấm phiếu giấy (OMR)</button>)}<a className="btn" href={`#/nhap-de${suffix}`}><Icon name="upload" />Nhập đề từ file</a><a className="btn primary" href={`#/ra-de${suffix}`}><Icon name="plus" />Tạo đề mới</a></div>
       </div>
 
-      <div className="catalog-summary">
-        <div className="stat-widget">
-          <div className="stat-widget-icon blue">
+      <section className="dash-metrics-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 12 }}>
+        <div className="metric-card">
+          <div className="metric-icon-wrap blue">
             <Icon name="exam" />
           </div>
-          <div className="stat-widget-info">
-            <span className="stat-widget-num">{allExams.length}</span>
-            <span className="stat-widget-label">Tổng số đề thi</span>
+          <div className="metric-info">
+            <span className="metric-val">{allExams.length}</span>
+            <span className="metric-lbl">Tổng số đề thi</span>
           </div>
         </div>
-        <div className="stat-widget">
-          <div className="stat-widget-icon green">
+        <div className="metric-card">
+          <div className="metric-icon-wrap green">
             <Icon name="user" />
           </div>
-          <div className="stat-widget-info">
-            <span className="stat-widget-num">{myCount}</span>
-            <span className="stat-widget-label">Đề của bạn</span>
+          <div className="metric-info">
+            <span className="metric-val">{myCount}</span>
+            <span className="metric-lbl">Đề của bạn</span>
           </div>
         </div>
-        <div className="stat-widget">
-          <div className="stat-widget-icon purple">
+        <div className="metric-card">
+          <div className="metric-icon-wrap purple">
             <Icon name="school" />
           </div>
-          <div className="stat-widget-info">
-            <span className="stat-widget-num">{sharedCount}</span>
-            <span className="stat-widget-label">Dùng chung trường</span>
+          <div className="metric-info">
+            <span className="metric-val">{sharedCount}</span>
+            <span className="metric-lbl">Dùng chung trường</span>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="card flat stack" style={{ padding: '12px 16px', gap: 10 }}>
+      <div className="card flat stack" style={{ padding: '14px 18px', gap: 10, borderRadius: 12, border: '1px solid var(--line)', background: '#ffffff', boxShadow: 'var(--shadow-sm)' }}>
         <div className="row between wrap" style={{ gap: 10 }}>
           <div className="seg" aria-label="Phạm vi đề thi">
             {[

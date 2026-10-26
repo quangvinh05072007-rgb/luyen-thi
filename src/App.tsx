@@ -183,9 +183,16 @@ export function App() {
                 </div>
               </a>
               <div className="grow" />
-              <svg className="workspace-locale" width="24" height="16" viewBox="0 0 30 20" role="img" aria-label="Tiếng Việt"><path fill="#da251d" d="M0 0h30v20H0z"/><path fill="#ff0" d="m15 3 1.6 4.9h5.2l-4.2 3 1.6 4.9-4.2-3-4.2 3 1.6-4.9-4.2-3h5.2Z"/></svg>
+              <div className="workspace-locale-pill" title="Ngôn ngữ: Tiếng Việt" tabIndex={0}>
+                <svg className="workspace-locale" width="20" height="14" viewBox="0 0 30 20" role="img" aria-label="Tiếng Việt"><path fill="#da251d" d="M0 0h30v20H0z"/><path fill="#ff0" d="m15 3 1.6 4.9h5.2l-4.2 3 1.6 4.9-4.2-3-4.2 3 1.6-4.9-4.2-3h5.2Z"/></svg>
+                <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true" style={{color:'var(--ink-3)'}}><path d="m6 8 4 4 4-4"/></svg>
+              </div>
               <details className="account-menu" onKeyDown={e=>{if(e.key==='Escape')e.currentTarget.open=false;}}>
-                <summary><span className="workspace-avatar" aria-hidden="true">{initials}</span><span className="workspace-account-name"><strong>{user.displayName}</strong><small>{roleLabel}</small></span></summary>
+                <summary>
+                  <span className="workspace-avatar" aria-hidden="true">{initials}</span>
+                  <span className="workspace-account-name"><strong>{user.displayName}</strong><small>{roleLabel}</small></span>
+                  <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true" style={{color:'var(--ink-3)',marginLeft:4}}><path d="m6 8 4 4 4-4"/></svg>
+                </summary>
                 <div className="account-options" onClick={e=>{(e.currentTarget.parentElement as HTMLDetailsElement).open=false;}}><a href="#/tai-khoan">Tài khoản</a>{user.role==='admin'&&<><a href="#/nguoi-dung">Người dùng & phân công</a><a href="#/nhat-ky">Nhật ký</a><a href="#/bao-cao">Báo cáo toàn trường</a></>}<button onClick={logout}>Đăng xuất</button></div>
               </details>
             </div>

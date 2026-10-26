@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { download, get, post, put } from '../../api';
 import { MathText } from '../../ui/MathText';
-import { PageHeading, ErrorBox, LevelBadge, Loading, Modal, SourceBadge, topicName, TypeBadge, useApp, useAsync, useRoute } from '../../ui/kit';
+import { PageHeading, ErrorBox, Icon, LevelBadge, Loading, Modal, SourceBadge, topicName, TypeBadge, useApp, useAsync, useRoute } from '../../ui/kit';
 import { Draft, QuestionEditor } from '../../ui/QuestionEditor';
 import { Comments } from '../../ui/Comments';
 import { QuestionHistory } from '../../ui/QuestionHistory';
@@ -9,7 +9,7 @@ import { QuestionHistory } from '../../ui/QuestionHistory';
 export function QuestionCard({ q, selected, onSelect, onEdit, actions, onDraft }: { q: any; selected?: boolean; onSelect?: () => void; onEdit?: () => void; actions?: React.ReactNode; onDraft?: (action: 'approve' | 'reject', confirmMismatch?: boolean) => void }) {
   const { meta } = useApp();
   return (
-    <div className="card flat" style={selected ? { borderColor: 'var(--primary)', background: 'var(--primary-soft)' } : undefined}>
+    <div className="card flat" style={{ borderRadius: 12, border: '1px solid var(--line)', background: selected ? 'var(--primary-soft)' : '#ffffff', boxShadow: 'var(--shadow-sm)', padding: '18px 20px', ...(selected ? { borderColor: 'var(--primary)' } : {}) }}>
       <div className="row mb" style={{ gap: 6 }}>
         {onSelect && <input type="checkbox" checked={!!selected} onChange={onSelect} aria-label={`Chọn câu #${q.id}`} />}
         <span className="tiny muted">#{q.id}</span>
@@ -198,8 +198,37 @@ export function Bank() {
           </a>
         </div>
       </div>
+      <section className="dash-metrics-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 8 }}>
+        <div className="metric-card">
+          <div className="metric-icon-wrap blue">
+            <Icon name="book" />
+          </div>
+          <div className="metric-info">
+            <span className="metric-val">{(data?.counts?.approved ?? 0) + (data?.counts?.draft ?? 0)}</span>
+            <span className="metric-lbl">Tổng số câu hỏi</span>
+          </div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-icon-wrap green">
+            <Icon name="check" />
+          </div>
+          <div className="metric-info">
+            <span className="metric-val">{data?.counts?.approved ?? 0}</span>
+            <span className="metric-lbl">Câu đã duyệt</span>
+          </div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-icon-wrap amber">
+            <Icon name="clock" />
+          </div>
+          <div className="metric-info">
+            <span className="metric-val">{data?.counts?.draft ?? 0}</span>
+            <span className="metric-lbl">Câu nháp chờ duyệt</span>
+          </div>
+        </div>
+      </section>
       {data?.reviewPolicy === 'double' && <div className="alert info small">Trường đang duyệt hai người: câu nháp cần hai người khác nhau xác nhận. Sửa nội dung sẽ bắt đầu lại lượt duyệt.</div>}
-      <div className="card flat">
+      <div className="card flat" style={{ borderRadius: 12, border: '1px solid var(--line)', background: '#ffffff', boxShadow: 'var(--shadow-sm)', padding: '14px 18px' }}>
         <div className="bank-filters">
           <input className="input" style={{ flex: 2, minWidth: 180 }} aria-label="Tìm trong đề bài" placeholder="Tìm trong đề bài…" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
           <select className="input" style={{ flex: 1, minWidth: 130 }} value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} aria-label="Trạng thái">
