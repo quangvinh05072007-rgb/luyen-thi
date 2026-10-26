@@ -29,6 +29,8 @@ export type Meta = {
   types: Record<string, string>;
   aiEnabled: boolean;
   mathOcrAvailable?: boolean;
+  mathVerifyAvailable?: boolean;
+  omrAvailable?: boolean;
   lanIps: string[];
   aiHint: string | null;
 };
@@ -271,6 +273,8 @@ const P: Record<string, string> = {
   plus: 'M12 5v14M5 12h14',
   gear: 'm9 3-1 3-3 1-2 3 2 2-1 3 2 3 3-1 2 3h3l1-3 3-1 2-3-2-2 1-3-2-3-3 1-2-3ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
   upload: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12',
+  print: 'M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z',
+  scan: 'M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10',
 };
 
 export function AzotaLogo({ size = 32 }: { size?: number }) {

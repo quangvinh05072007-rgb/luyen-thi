@@ -24,6 +24,9 @@ import { registerReports } from './reports.mjs';
 import { registerFamily } from './family.mjs';
 import { ImportJobs } from './import-jobs.mjs';
 import { mathOcrAvailable, recognizeMathImages } from './math-ocr.mjs';
+import { isMathVerifyAvailable, verifyMathEquivalence, validateMathExpression } from './math-verify.mjs';
+import { findDuplicates } from '../shared/duplicate-detector.mjs';
+import { isOmrAvailable, processOmrImage, generateOmrTemplateHtml } from './omr.mjs';
 
 export const SAVE_GRACE_MS = 30 * 1000; // ân hạn mạng sau giờ nộp
 export const LATE_WINDOW_MS = 15 * 60 * 1000; // nhận bản đồng bộ muộn (mất mạng) để giáo viên quyết định
@@ -494,6 +497,8 @@ export function createApp(config = {}) {
     officialBlueprint: OFFICIAL_BLUEPRINT,
     aiEnabled: ai.enabled,
     mathOcrAvailable: mathOcrAvailable(),
+    mathVerifyAvailable: isMathVerifyAvailable(),
+    omrAvailable: isOmrAvailable(),
     lanIps: Object.values(os.networkInterfaces()).flat().filter((a) => a && a.family === 'IPv4' && !a.internal).map((a) => a.address),
     aiHint: ai.enabled ? null : 'Chưa cấu hình khóa AI. Thêm ANTHROPIC_API_KEY vào config.local.json rồi khởi động lại.',
     serverNow: now(),
@@ -501,6 +506,19 @@ export function createApp(config = {}) {
 
   // ---- ngân hàng câu hỏi (giáo viên, quản lý) ----
   const STAFF = ['admin', 'teacher'];
+  route('POST', '/api/math/verify', null, async ({ body }) => {
+    const expr1 = String(body.expr1 ?? '').trim();
+    const expr2 = String(body.expr2 ?? '').trim();
+    if (!expr1 || !expr2) fail(400, 'Cần truyền cả hai biểu thức expr1 và expr2.');
+    return verifyMathEquivalence(expr1, expr2);
+  });
+
+  route('POST', '/api/math/validate', null, async ({ body }) => {
+    const expr = String(body.expr ?? '').trim();
+    if (!expr) fail(400, 'Cần truyền biểu thức expr.');
+    return validateMathExpression(expr);
+  });
+
   route('GET', '/api/questions', STAFF, ({ user, query }) => {
     const where = ['school_id = ?'];
     const p = [user.school_id];
@@ -558,6 +576,19 @@ export function createApp(config = {}) {
     audit(user, 'question_create', `#${id}`, ip);
     return { id };
   });
+  route('POST', '/api/questions/check-duplicate', STAFF, ({ user, body }) => {
+    const stem = String(body.stem ?? '').trim();
+    if (!stem) return { duplicates: [] };
+    const currentId = body.currentId ? Number(body.currentId) : null;
+    const questions = db.all("SELECT id, type, stem, topic, level FROM questions WHERE school_id = ? AND status != 'archived'", user.school_id)
+      .filter((q) => q.id !== currentId);
+    const duplicates = findDuplicates(stem, questions, {
+      threshold: typeof body.threshold === 'number' ? body.threshold : 0.65,
+      limit: typeof body.limit === 'number' ? body.limit : 5,
+    });
+    return { duplicates };
+  });
+
   route('PUT', '/api/questions/:id', STAFF, ({ user, params, body, ip }) => {
     const q = db.get('SELECT * FROM questions WHERE id = ? AND school_id = ?', params.id, user.school_id);
     if (!q) fail(404, 'Không tìm thấy câu hỏi.');
@@ -1086,6 +1117,98 @@ export function createApp(config = {}) {
     audit(user, 'exam_export_docx', `#${e.id}`, ip, { target: `exam:${e.id}` });
     const safe = e.title.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^\w-]+/g, '-').slice(0, 60);
     return { __file: { name: `${safe || 'de-thi'}.docx`, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: buf } };
+  });
+
+  // ---- thi trên giấy (OMR) ----
+  route('GET', '/api/omr/template', null, ({ query }) => {
+    let schoolName = 'TRƯỜNG THPT';
+    let examTitle = 'BÀI KIỂM TRA ĐỊNH KỲ';
+    let durationMin = 90;
+    if (query.examId) {
+      const exam = db.get('SELECT * FROM exams WHERE id = ?', Number(query.examId));
+      if (exam) {
+        examTitle = exam.title;
+        durationMin = exam.duration_min;
+        const school = db.get('SELECT name FROM schools WHERE id = ?', exam.school_id);
+        if (school) schoolName = school.name;
+      }
+    }
+    const html = generateOmrTemplateHtml({ schoolName, examTitle, durationMin });
+    return {
+      __file: {
+        name: 'phieu-tra-loi-trac-nghiem-2025.html',
+        type: 'text/html; charset=utf-8',
+        data: Buffer.from(html, 'utf8'),
+        inline: true,
+      },
+    };
+  });
+
+  route('POST', '/api/omr/scan', STAFF, async ({ raw, body }) => {
+    let buf = raw;
+    if ((!buf || !buf.length) && body?.imageBase64) {
+      const cleanB64 = body.imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      buf = Buffer.from(cleanB64, 'base64');
+    }
+    if (!buf || !buf.length) fail(400, 'Chưa tải lên file ảnh phiếu trả lời.');
+    const result = await processOmrImage(buf);
+    if (!result.success) fail(422, result.error || 'Không thể nhận diện phiếu trả lời.');
+    return result;
+  });
+
+  route('POST', '/api/omr/grade', STAFF, ({ user, body }) => {
+    const examId = Number(body.examId);
+    if (!examId) fail(400, 'Thiếu examId.');
+    const e = visibleExam(user, examId);
+
+    const v = body.variantCode ? (e.variants ?? []).find((x) => String(x.code) === String(body.variantCode)) : null;
+    const layout = v ? variantLayout(e.id, e.items, v) : e.items;
+
+    const p1 = Array.isArray(body.answers?.partI) ? body.answers.partI : [];
+    const p2 = Array.isArray(body.answers?.partII) ? body.answers.partII : [];
+    const p3 = Array.isArray(body.answers?.partIII) ? body.answers.partIII : [];
+
+    const displayedResponses = {};
+    let mcqIdx = 0;
+    let tfIdx = 0;
+    let shortIdx = 0;
+
+    for (const it of layout) {
+      const q = e.snapshot[it.qid];
+      if (!q) continue;
+      if (it.part === 'I' || q.type === 'mcq') {
+        const item = p1[mcqIdx++];
+        displayedResponses[it.qid] = typeof item?.selected === 'number' ? item.selected : null;
+      } else if (it.part === 'II' || q.type === 'tf') {
+        const item = p2[tfIdx++];
+        displayedResponses[it.qid] = Array.isArray(item?.selected) ? item.selected : [null, null, null, null];
+      } else if (it.part === 'III' || q.type === 'short') {
+        const item = p3[shortIdx++];
+        displayedResponses[it.qid] = item?.value ? String(item.value) : '';
+      }
+    }
+
+    const orig = {};
+    const questions = [];
+    for (const it of layout) {
+      const q = e.snapshot[it.qid];
+      if (!q) continue;
+      questions.push(q);
+      orig[q.id] = toOriginalResponse(it, displayedResponses[it.qid]);
+    }
+
+    const grade = gradeAttempt(questions, orig);
+    const diag = diagnoseAttempt(questions, orig);
+
+    return {
+      examId,
+      studentCode: body.studentCode ?? null,
+      variantCode: body.variantCode ?? (v ? v.code : null),
+      grade,
+      diagnosis: diag,
+      responses: orig,
+      displayedResponses,
+    };
   });
 
   // ---- lớp, giao đề, báo cáo ----
@@ -2333,7 +2456,8 @@ export function createApp(config = {}) {
       if (cookieOut.length) res.setHeader('set-cookie', cookieOut);
       if (result?.__file) {
         const f = result.__file;
-        res.writeHead(200, f.inline ? { ...headers, 'content-type': f.type, 'content-disposition': 'inline', 'cache-control': 'private, max-age=86400', 'content-security-policy': "default-src 'none'; sandbox" } : { ...headers, 'content-type': f.type, 'content-disposition': `attachment; filename="${f.name}"`, 'cache-control': 'no-store' });
+        const isHtml = (f.type ?? '').includes('html');
+        res.writeHead(200, f.inline ? { ...headers, 'content-type': f.type, 'content-disposition': 'inline', 'cache-control': 'private, max-age=86400', ...(isHtml ? {} : { 'content-security-policy': "default-src 'none'; sandbox" }) } : { ...headers, 'content-type': f.type, 'content-disposition': `attachment; filename="${f.name}"`, 'cache-control': 'no-store' });
         res.end(f.data);
         return;
       }

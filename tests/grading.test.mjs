@@ -34,10 +34,16 @@ test('Phần II: thang 0 / 0,1 / 0,25 / 0,5 / 1 theo số ý đúng', () => {
 test('Phần III: chuẩn hóa dấu phẩy, dấu trừ unicode, khoảng trắng, phân số', () => {
   assert.equal(normalizeShort(' −1,5 '), '-1.5');
   assert.equal(parseNumber('3/4'), 0.75);
+  assert.equal(parseNumber('\\frac{1}{2}'), 0.5);
+  assert.equal(parseNumber('\\dfrac{3}{4}'), 0.75);
+  assert.equal(parseNumber('x = 2'), 2);
+  assert.equal(parseNumber('\\sqrt{9}'), 3);
   assert.ok(Number.isNaN(parseNumber('abc')));
-  for (const r of ['-1,5', '-1.5', '−1,50', ' -1.5', '-3/2']) assert.equal(gradeQuestion(sh, r).points, 500, r);
+  for (const r of ['-1,5', '-1.5', '−1,50', ' -1.5', '-3/2', '-\\frac{3}{2}']) assert.equal(gradeQuestion(sh, r).points, 500, r);
   for (const r of ['1,5', '-1,4', '', 'x']) assert.equal(gradeQuestion(sh, r).points, 0, r);
   assert.ok(shortMatches('2;-2', '-2'), 'nhiều đáp án được chấp nhận');
+  assert.ok(shortMatches('\\frac{1}{2}', '0,5'), 'phân số LaTeX khớp số thập phân tiếng Việt');
+  assert.ok(shortMatches('0.5', '\\frac{1}{2}'), 'số thập phân khớp phân số LaTeX');
 });
 
 test('Đề đủ cấu trúc 12/4/6 làm đúng hết được 10 điểm, cộng đúng từng phần', () => {

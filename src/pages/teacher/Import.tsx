@@ -435,8 +435,46 @@ export function ImportPage() {
                     <QuestionEditor q={q} onChange={(nq) => update(i, nq)} />
                   ) : (
                     <>
-                      <MathText as="div" className="q-stem" text={q.stem} />
-                      {q.ocrText && <details className="small muted mt"><summary>Chữ OCR tham khảo · Phần {q.part}, câu {q.num}{q.scanPages ? ` · trang ${q.scanPages.join(', ')}` : ''}</summary><pre style={{whiteSpace:'pre-wrap',fontFamily:'inherit'}}>{q.ocrText}</pre></details>}
+                      {((q.sourceStem || q.stem.includes('[[img:')) && q.ocrText) ? (
+                        <div className="side-by-side-ocr mb" style={{ border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
+                          <div className="row" style={{ background: 'var(--bg-subtle, #f8fafc)', padding: '6px 12px', borderBottom: '1px solid var(--line)', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                              <span className="tiny" style={{ fontWeight: 600 }}>Đối chiếu scan:</span>
+                              <span className={`badge sm ${q.stem.includes('[[img:') ? 'blue' : 'green'}`}>
+                                {q.stem.includes('[[img:') ? '🖼️ Đang hiển thị ảnh scan gốc' : '✏️ Đang hiển thị text OCR'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn sm"
+                              onClick={() => {
+                                if (q.stem.includes('[[img:')) {
+                                  update(i, { ...q, sourceStem: q.sourceStem || q.stem, stem: q.ocrText });
+                                } else {
+                                  update(i, { ...q, stem: q.sourceStem || q.stem });
+                                }
+                              }}
+                            >
+                              {q.stem.includes('[[img:') ? 'Chuyển sang text OCR' : 'Khôi phục ảnh scan gốc'}
+                            </button>
+                          </div>
+                          <div className="grid-2" style={{ gap: 0 }}>
+                            <div style={{ padding: 10, borderRight: '1px solid var(--line)', background: '#fff' }}>
+                              <div className="tiny muted mb">Ảnh quét gốc:</div>
+                              <MathText as="div" className="q-stem" text={q.sourceStem || q.stem} />
+                            </div>
+                            <div style={{ padding: 10, background: '#fafbfc' }}>
+                              <div className="tiny muted mb">Nội dung text OCR:</div>
+                              <MathText as="div" className="q-stem" text={q.stem.includes('[[img:') ? q.ocrText : q.stem} />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <MathText as="div" className="q-stem" text={q.stem} />
+                      )}
+                      {q.ocrText && !((q.sourceStem || q.stem.includes('[[img:')) && q.ocrText) && (
+                        <details className="small muted mt"><summary>Chữ OCR tham khảo · Phần {q.part}, câu {q.num}{q.scanPages ? ` · trang ${q.scanPages.join(', ')}` : ''}</summary><pre style={{whiteSpace:'pre-wrap',fontFamily:'inherit'}}>{q.ocrText}</pre></details>
+                      )}
                       {q.type !== 'short' && (
                         <div className="grid-2 mt" style={{ gap: 4 }}>
                           {q.options.map((o: string, k: number) => (

@@ -15,24 +15,38 @@ export function maxPoints(type) {
   throw new Error(`Loại câu không hợp lệ: ${type}`);
 }
 
-/** Chuẩn hóa câu trả lời ngắn: bỏ khoảng trắng, dấu trừ unicode, dấu phẩy thập phân → chấm. */
+/** Chuẩn hóa câu trả lời ngắn: bỏ khoảng trắng, ký hiệu LaTeX/dollar, biến dẫn xuất (x=), dấu trừ unicode, dấu phẩy thập phân → chấm. */
 export function normalizeShort(s) {
   if (s === null || s === undefined) return '';
   return String(s)
     .trim()
     .replace(/[−–—]/g, '-')
+    .replace(/^\$+|\$+$/g, '')
+    .replace(/^\\\((.+)\\\)$/, '$1')
+    .replace(/^[a-zA-Z]\s*=\s*/, '')
     .replace(/\s+/g, '')
     .replace(/,/g, '.')
     .toLowerCase();
 }
 
-/** Đổi chuỗi trả lời thành số; nhận "1.5", "-0.25", "3/4". Không phải số → NaN. */
+/** Đổi chuỗi trả lời thành số; nhận "1.5", "-0.25", "3/4", "\frac{1}{2}", "\sqrt{9}". Không phải số → NaN. */
 export function parseNumber(s) {
   const t = normalizeShort(s);
   if (t === '') return NaN;
   if (/^[+-]?\d+(\.\d+)?$/.test(t) || /^[+-]?\.\d+$/.test(t)) return Number(t);
   const frac = t.match(/^([+-]?\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/);
   if (frac && Number(frac[2]) !== 0) return Number(frac[1]) / Number(frac[2]);
+  const lfrac = t.match(/^([+-]?)\\d?frac\{([+-]?\d+(?:\.\d+)?)\}\{([+-]?\d+(?:\.\d+)?)\}$/);
+  if (lfrac && Number(lfrac[3]) !== 0) {
+    const sign = lfrac[1] === '-' ? -1 : 1;
+    return (sign * Number(lfrac[2])) / Number(lfrac[3]);
+  }
+  const root = t.match(/^([+-]?)\\sqrt\{(\d+(?:\.\d+)?)\}$/);
+  if (root) {
+    const sign = root[1] === '-' ? -1 : 1;
+    const v = Number(root[2]);
+    if (v >= 0) return sign * Math.sqrt(v);
+  }
   return NaN;
 }
 

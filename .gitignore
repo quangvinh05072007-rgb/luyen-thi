@@ -5,3 +5,5 @@ config.local.json
 *.log
 tmp-out/
 tmp-serve.mjs
+__pycache__/
+*.pyc

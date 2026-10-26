@@ -1,16 +1,24 @@
 // Sửa một câu hỏi (dùng ở Ngân hàng và Nhập đề). Có xem trước công thức.
-import { lazy, Suspense, useId, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useState } from 'react';
 import { MathText } from './MathText';
 import { useApp } from './kit';
+import { post } from '../api';
 const RichField=lazy(()=>import('./RichField'));
 const MathOcrReview=lazy(()=>import('./MathOcrReview'));
 
-export type Draft = { type: 'mcq' | 'tf' | 'short'; stem: string; options: string[]; answer: any; explanation: string; topic: string | null; level: number; distractors?: any; group_id?: string | null; ocrText?: string; sourceStem?: string };
+export type Draft = { id?: number; type: 'mcq' | 'tf' | 'short'; stem: string; options: string[]; answer: any; explanation: string; topic: string | null; level: number; distractors?: any; group_id?: string | null; ocrText?: string; sourceStem?: string };
 
 export function QuestionEditor({ q, onChange }: { q: Draft; onChange: (q: Draft) => void }) {
   const { meta } = useApp();
   const uid = useId();
   const [mathOcr,setMathOcr]=useState(false);
+  const [duplicates, setDuplicates] = useState<any[]>([]);
+  const [showDups, setShowDups] = useState(false);
+  const [testExpr, setTestExpr] = useState('');
+  const [testResult, setTestResult] = useState<{ equivalent?: boolean; error?: string } | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [showMathTest, setShowMathTest] = useState(false);
+
   const original=q.sourceStem || (q.ocrText&&q.stem.includes('[[img:')?q.stem:'');
   const set = (patch: Partial<Draft>) => onChange({ ...q, ...patch });
   const setType = (type: Draft['type']) => {
@@ -25,6 +33,43 @@ export function QuestionEditor({ q, onChange }: { q: Draft; onChange: (q: Draft)
     if (error) d[i] = { error, note: d[i]?.note ?? '' };
     else delete d[i];
     set({ distractors: d });
+  };
+
+  useEffect(() => {
+    const rawStem = (q.stem || '').replace(/\[\[img:[^\]]+\]\]/g, '').trim();
+    if (rawStem.length < 20) {
+      setDuplicates([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await post<{ duplicates: any[] }>('/api/questions/check-duplicate', {
+          stem: q.stem,
+          currentId: q.id,
+        });
+        setDuplicates(res.duplicates || []);
+      } catch {
+        // bỏ qua nếu lỗi mạng hoặc không có quyền
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [q.stem, q.id]);
+
+  const handleTestVerify = async () => {
+    if (!testExpr.trim() || !q.answer) return;
+    setVerifying(true);
+    setTestResult(null);
+    try {
+      const res = await post<{ equivalent: boolean; error?: string }>('/api/math/verify', {
+        expr1: String(q.answer).split(';')[0].trim(),
+        expr2: testExpr.trim(),
+      });
+      setTestResult(res);
+    } catch (e: any) {
+      setTestResult({ equivalent: false, error: e.message || 'Lỗi kiểm tra' });
+    } finally {
+      setVerifying(false);
+    }
   };
   return (
     <div className={`question-editor ${original?'has-source':''}`}>
@@ -64,6 +109,31 @@ export function QuestionEditor({ q, onChange }: { q: Draft; onChange: (q: Draft)
       <div className="field">
         <label>Đề bài</label>
         <Suspense fallback={<span className="tiny muted">Đang mở trình soạn…</span>}><RichField label="Đề bài" value={q.stem} onChange={stem=>set({stem,...(original?{sourceStem:original}:{})})}/></Suspense>
+        {duplicates.length > 0 && (
+          <div className="callout warning" style={{ padding: '8px 12px', fontSize: 13, marginTop: 8, borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a' }}>
+            <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between', marginBottom: showDups ? 6 : 0 }}>
+              <span style={{ color: '#92400e', fontWeight: 600 }}>⚠️ Phát hiện {duplicates.length} câu tương tự trong ngân hàng ({Math.round(duplicates[0].score * 100)}% trùng)</span>
+              <button type="button" className="btn sm plain" onClick={() => setShowDups(!showDups)}>
+                {showDups ? 'Ẩn' : 'Xem câu trùng'}
+              </button>
+            </div>
+            {showDups && (
+              <div className="stack" style={{ gap: 6, marginTop: 4, maxHeight: 180, overflowY: 'auto' }}>
+                {duplicates.map((d: any) => (
+                  <div key={d.id} style={{ borderTop: '1px dashed #fcd34d', paddingTop: 4 }}>
+                    <div className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
+                      <span className="badge sm" style={{ background: '#fef3c7', color: '#92400e', fontWeight: 600 }}>Câu #{d.id} · {Math.round(d.score * 100)}%</span>
+                      <span className="tiny muted">{d.reason}</span>
+                    </div>
+                    <div className="tiny" style={{ color: '#4b5563', lineHeight: 1.4 }}>
+                      <MathText text={d.stem.length > 130 ? d.stem.slice(0, 130) + '…' : d.stem} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       {(q.ocrText || /^\s*(\[\[img:\d+\]\]\s*)+$/.test(q.stem)) && <label className="field">Chữ OCR tham khảo (có thể sai ký hiệu Toán; ảnh gốc ở trên được giữ nguyên)<textarea className="input" value={q.ocrText ?? ''} onChange={e=>set({ocrText:e.target.value})} /></label>}
       {q.type === 'mcq' &&
@@ -105,7 +175,31 @@ export function QuestionEditor({ q, onChange }: { q: Draft; onChange: (q: Draft)
       {q.type === 'short' && (
         <div className="field">
           <label>Đáp án (nhiều đáp án được chấp nhận thì ngăn bằng dấu ;)</label>
-          <input className="input" style={{ maxWidth: 240 }} value={q.answer ?? ''} onChange={(e) => set({ answer: e.target.value })} />
+          <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <input className="input" style={{ maxWidth: 260 }} value={q.answer ?? ''} onChange={(e) => set({ answer: e.target.value })} placeholder="VD: 1/2; 0.5" />
+            {meta.mathVerifyAvailable && (
+              <button type="button" className="btn sm" onClick={() => setShowMathTest(!showMathTest)}>
+                {showMathTest ? 'Đóng kiểm tra' : 'Kiểm tra tương đương (SymPy)'}
+              </button>
+            )}
+          </div>
+          {showMathTest && (
+            <div style={{ marginTop: 8, padding: 10, background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8 }}>
+              <p className="tiny muted" style={{ margin: '0 0 6px 0' }}>Nhập thử cách viết khác của học sinh (phân số, căn, biểu thức tương đương):</p>
+              <div className="row" style={{ gap: 8 }}>
+                <input className="input sm" value={testExpr} onChange={(e) => setTestExpr(e.target.value)} placeholder="VD: \frac{1}{2} hoặc 0,5" style={{ maxWidth: 220 }} />
+                <button type="button" className="btn sm primary" disabled={verifying || !testExpr.trim()} onClick={handleTestVerify}>
+                  {verifying ? 'Đang tính…' : 'Thử nghiệm'}
+                </button>
+              </div>
+              {testResult && (
+                <p className="tiny" style={{ marginTop: 6, fontWeight: 600, color: testResult.equivalent ? '#15803d' : '#b91c1c' }}>
+                  {testResult.equivalent ? '✓ Khớp tương đương toán học với đáp án!' : '✗ Không khớp tương đương với đáp án.'}
+                  {testResult.error && ` (${testResult.error})`}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
       <div className="field">

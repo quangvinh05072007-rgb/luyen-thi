@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { download, get, post } from '../../api';
 import { MathText } from '../../ui/MathText';
 import { Comments } from '../../ui/Comments';
+import { OmrModal } from '../../ui/OmrModal';
 import { PageHeading, shareUrl, ErrorBox, fmtDate, go, LevelBadge, Icon, Loading, topicName, useApp, useAsync, useRoute } from '../../ui/kit';
 
 export function Exams() {
@@ -12,6 +13,8 @@ export function Exams() {
   const [scope, setScope] = useState('all');
   const [search, setSearch] = useState('');
   const [dept, setDept] = useState('');
+  const [omrExam, setOmrExam] = useState<any>(null);
+  const { meta } = useApp();
   const { data, error, loading, reload } = useAsync(() => get('/api/exams'), []);
   const allExams = data?.exams ?? [];
   const exams = filterExamCatalog(allExams,{scope,search,dept});
@@ -22,7 +25,7 @@ export function Exams() {
     <div className="stack">
       <div className="row between">
         <PageHeading title="Kho đề" description="Đề đã lưu để giao cho lớp, luyện tập hoặc xuất Word." icon="exam" />
-        <div className="row"><a className="btn" href={`#/nhap-de${suffix}`}><Icon name="upload" />Nhập đề từ file</a><a className="btn primary" href={`#/ra-de${suffix}`}><Icon name="plus" />Tạo đề mới</a></div>
+        <div className="row">{meta.omrAvailable && (<button className="btn ghost" type="button" onClick={() => setOmrExam(allExams[0] || { id: 0, title: 'Phiếu trắc nghiệm' })}><Icon name="scan" /> Chấm phiếu giấy (OMR)</button>)}<a className="btn" href={`#/nhap-de${suffix}`}><Icon name="upload" />Nhập đề từ file</a><a className="btn primary" href={`#/ra-de${suffix}`}><Icon name="plus" />Tạo đề mới</a></div>
       </div>
 
       <div className="catalog-summary">
@@ -221,6 +224,7 @@ export function Exams() {
           })}
         </div>
       )}
+      {omrExam && <OmrModal exam={omrExam} onClose={() => setOmrExam(null)} onGraded={() => reload()} />}
     </div>
   );
 }
@@ -246,6 +250,7 @@ export function ExamDetail({ id }: { id: number }) {
   const [duration, setDuration] = useState<number | null>(null);
   const [showResult, setShowResult] = useState<'after_submit' | 'after_close'>('after_submit');
   const [busy, setBusy] = useState(false);
+  const [showOmr, setShowOmr] = useState(false);
   const [variantMode, setVariantMode] = useState('per_student');
   const [sharing, setSharing] = useState(false);
   const [deptDraft, setDeptDraft] = useState<string | null>(null);
@@ -375,6 +380,23 @@ export function ExamDetail({ id }: { id: number }) {
           </button>
         </div>
       </div>
+      <div className="card">
+        <div className="card-head">
+          <h2>Thi trên giấy & Chấm phiếu (OMR)</h2>
+        </div>
+        <p className="small muted">In phiếu trả lời trắc nghiệm chuẩn A4 theo định dạng 2025 có 4 điểm định vị. Quét và chấm bài tự động bằng camera hoặc máy scan.</p>
+        <div className="row">
+          <a className="btn" href={`/api/omr/template?examId=${id}`} target="_blank" rel="noreferrer">
+            <Icon name="print" /> In phiếu trả lời A4
+          </a>
+          {meta.omrAvailable && (
+            <button className="btn primary" type="button" onClick={() => setShowOmr(true)}>
+              <Icon name="scan" /> Quét & Chấm phiếu thi
+            </button>
+          )}
+        </div>
+      </div>
+      {showOmr && <OmrModal exam={data} onClose={() => setShowOmr(false)} onGraded={() => toast('Đã chấm xong phiếu!')} />}
       <div className="card"><Comments kind="exam" id={id} /></div>
       <div className="card">
         <h2>Nội dung đề</h2>
